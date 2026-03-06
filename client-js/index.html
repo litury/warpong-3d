@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Pong</title>
+  <script src="https://yandex.ru/games/sdk/v2"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #000; font-family: Arial, sans-serif; color: #fff; position: fixed; touch-action: none; }
+    #app {
+      width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; position: relative;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    }
+    canvas { display: block; touch-action: none; }
+
+    /* Overlay screens */
+    .screen {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      display: none; flex-direction: column; align-items: center; justify-content: center;
+      z-index: 10; pointer-events: auto;
+    }
+    .screen button {
+      padding: 12px 40px; margin: 8px; font-size: 18px; font-weight: bold;
+      border: 2px solid #fff; background: transparent; color: #fff;
+      cursor: pointer; border-radius: 4px; min-width: 200px;
+      transition: background 0.2s, color 0.2s;
+    }
+    .screen button:hover { background: #fff; color: #000; }
+    .screen button:disabled { opacity: 0.4; cursor: default; }
+    .screen button:disabled:hover { background: transparent; color: #fff; }
+
+    .screen h1 { font-size: 64px; margin-bottom: 30px; }
+    .screen h2 { font-size: 48px; margin-bottom: 20px; }
+
+    /* HUD */
+    #screen-hud {
+      justify-content: flex-start; pointer-events: none;
+      flex-direction: row; padding: 15px 20px;
+    }
+    #screen-hud .hud-spacer { flex: 1; }
+    #screen-hud #hud-score { font-size: 36px; font-weight: bold; }
+    #screen-hud #hud-coins { font-size: 18px; color: rgba(255, 215, 0, 0.6); }
+    #screen-hud .hud-right { flex: 1; text-align: right; }
+    #hud-upgrades {
+      position: absolute; bottom: 15px; left: 20px;
+      display: flex; gap: 8px; pointer-events: none;
+    }
+    .hud-badge {
+      background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 4px; padding: 4px 8px; font-size: 14px; color: #fff;
+      white-space: nowrap;
+    }
+
+    /* Game Over */
+    #gameover-coins { color: #ffd700; font-size: 20px; margin: 10px 0 20px; }
+    #leaderboard { margin: 20px 0; }
+    #leaderboard h3 { font-size: 20px; margin-bottom: 10px; }
+    #leaderboard-list { list-style: none; text-align: left; }
+    #leaderboard-list li { padding: 4px 0; font-size: 16px; color: #ccc; }
+
+    /* Lobby */
+    #lobby-status { font-size: 24px; margin-bottom: 20px; }
+    .dots::after { content: ''; animation: dots 1.5s steps(4, end) infinite; }
+    @keyframes dots {
+      0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; }
+    }
+
+    /* Shop */
+    #screen-shop { background: rgba(0,0,0,0.95); overflow-y: auto; justify-content: flex-start; padding: 30px; }
+    #shop-coins { font-size: 24px; color: #ffd700; margin-bottom: 20px; }
+    .shop-category { font-size: 18px; color: #aaa; margin: 15px 0 8px; text-transform: uppercase; }
+    #shop-items { width: 100%; max-width: 400px; }
+    .shop-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px; margin: 4px 0; background: rgba(255,255,255,0.05); border-radius: 4px;
+    }
+    .shop-item-info { flex: 1; }
+    .shop-item-info strong { font-size: 16px; }
+    .shop-item-info small { color: #888; }
+    .shop-btn { padding: 8px 16px !important; margin: 0 !important; min-width: 100px !important; font-size: 14px !important; }
+    .shop-btn.equipped { border-color: #4a4; color: #4a4; }
+    .shop-btn.maxed { border-color: #666; color: #666; }
+
+    /* Watch Ad button */
+    #btn-watch-ad { border-color: #ffd700; color: #ffd700; }
+    #btn-watch-ad:hover { background: #ffd700; color: #000; }
+
+    /* Orientation hint */
+    #orientation-hint {
+      display: none; position: absolute; bottom: 10px; left: 50%;
+      transform: translateX(-50%); color: rgba(255,255,255,0.3);
+      font-size: 12px; z-index: 5; pointer-events: none;
+    }
+
+    /* Responsive: narrow screens */
+    @media (max-width: 480px) {
+      .screen h1 { font-size: 36px; }
+      .screen h2 { font-size: 28px; }
+      .screen button { font-size: 14px; padding: 10px 24px; min-width: 160px; }
+      #screen-hud #hud-score { font-size: 24px; }
+      .hud-badge { font-size: 12px; padding: 3px 6px; }
+    }
+
+    /* Responsive: short screens (landscape phones) */
+    @media (max-height: 400px) {
+      .screen h1 { font-size: 32px; margin-bottom: 15px; }
+      .screen h2 { font-size: 24px; margin-bottom: 10px; }
+      .screen button { padding: 8px 20px; margin: 4px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <!-- PixiJS canvas will be appended here -->
+
+    <!-- MENU -->
+    <div id="screen-menu" class="screen">
+      <h1 data-i18n="menu.title">PONG</h1>
+      <button id="btn-play" data-i18n="menu.play">PLAY</button>
+      <button id="btn-online" data-i18n="menu.online">ONLINE</button>
+      <button id="btn-shop" data-i18n="menu.shop">SHOP</button>
+    </div>
+
+    <!-- HUD -->
+    <div id="screen-hud" class="screen">
+      <div class="hud-spacer"></div>
+      <div id="hud-score">0 : 0</div>
+      <div class="hud-right">
+        <span id="hud-coins">0</span>
+      </div>
+      <div id="hud-upgrades"></div>
+    </div>
+
+    <!-- GAME OVER -->
+    <div id="screen-game-over" class="screen">
+      <h2 id="gameover-title">YOU WIN!</h2>
+      <div id="gameover-coins">+10 coins</div>
+      <div id="leaderboard">
+        <h3 data-i18n="gameover.leaderboard">Leaderboard</h3>
+        <ol id="leaderboard-list"></ol>
+      </div>
+      <button id="btn-play-again" data-i18n="gameover.playAgain">PLAY AGAIN</button>
+      <button id="btn-new-opponent" data-i18n="gameover.newOpponent" style="display:none">NEW OPPONENT</button>
+      <button id="btn-watch-ad" data-i18n="gameover.watchAd">WATCH AD +15</button>
+      <button id="btn-menu-from-gameover" data-i18n="gameover.menu">MENU</button>
+    </div>
+
+    <!-- LOBBY -->
+    <div id="screen-lobby" class="screen">
+      <div id="lobby-status">Searching for opponent<span class="dots"></span></div>
+      <button id="btn-cancel-lobby" data-i18n="lobby.cancel">CANCEL</button>
+    </div>
+
+    <!-- SHOP -->
+    <div id="screen-shop" class="screen">
+      <h2 data-i18n="shop.title">SHOP</h2>
+      <div id="shop-coins">Coins: 0</div>
+      <div id="shop-items"></div>
+      <button id="btn-shop-back" data-i18n="shop.back" style="margin-top:20px">BACK</button>
+    </div>
+
+    <div id="orientation-hint" data-i18n="orientation.hint">↻ Rotate for best experience</div>
+  </div>
+
+  <script src="/dev/sdk_stub.js"></script>
+  <script src="/js/yandex_sdk.js"></script>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

@@ -1,0 +1,32 @@
+# Documentation (internal, not for VCS)
+/doc
+
+# Rust build artifacts
+/target
+/client/pkg
+
+# JS/Node
+client-js/node_modules/
+client-js/dist/
+
+# Dist output
+/dist
+
+# Claude project data
+/.claude
+/.playwright-mcp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*.swo
