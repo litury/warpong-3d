@@ -1,6 +1,10 @@
 # Documentation (internal, not for VCS)
 /doc
 
+# Rust build artifacts
+/target
+/client/pkg
+
 # JS/Node
 client-js/node_modules/
 client-js/dist/
