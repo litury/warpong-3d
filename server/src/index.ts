@@ -8,6 +8,7 @@ import type { PlayerRecord } from "./modules/db";
 import { handleFetch } from "./routes/http";
 import { handleBuyUpgrade, handleRewardCoins, handlePurchaseCoins, clearRewardCooldown } from "./handlers/purchase";
 import { handleEquipCosmetic } from "./handlers/cosmetic";
+import { validateMessage } from "./handlers/validate";
 
 const matchmaking = new Matchmaking();
 const connectedSockets = new Set<ServerWebSocket<PlayerData>>();
@@ -72,10 +73,17 @@ Bun.serve<PlayerData>({
     },
 
     message(ws, raw) {
-      let msg: ClientMessage;
+      let parsed: unknown;
       try {
-        msg = JSON.parse(typeof raw === "string" ? raw : new TextDecoder().decode(raw));
+        parsed = JSON.parse(typeof raw === "string" ? raw : new TextDecoder().decode(raw));
       } catch {
+        ws.send(JSON.stringify({ type: "Error", message: "invalid json" }));
+        return;
+      }
+
+      const msg: ClientMessage | null = validateMessage(parsed);
+      if (!msg) {
+        ws.send(JSON.stringify({ type: "Error", message: "invalid message" }));
         return;
       }
 
