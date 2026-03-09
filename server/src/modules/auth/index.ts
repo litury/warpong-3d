@@ -1,0 +1,1 @@
+export { verifyYandexSignature } from "./yandexAuth";
