@@ -4,6 +4,7 @@ import { GameSession, type PlayerData } from "../gameSession";
 export class Matchmaking {
   private queue: ServerWebSocket<PlayerData>[] = [];
   private sessions = new Map<string, GameSession>();
+  private playerSession = new Map<string, string>();
 
   addToQueue(ws: ServerWebSocket<PlayerData>): void {
     if (this.queue.includes(ws)) return;
@@ -31,10 +32,9 @@ export class Matchmaking {
   }
 
   getSessionForPlayer(playerId: string): GameSession | undefined {
-    for (const session of this.sessions.values()) {
-      if (session.hasPlayer(playerId)) return session;
-    }
-    return undefined;
+    const sessionId = this.playerSession.get(playerId);
+    if (!sessionId) return undefined;
+    return this.sessions.get(sessionId);
   }
 
   private tryMatch(): void {
@@ -42,8 +42,14 @@ export class Matchmaking {
       const left = this.queue.shift()!;
       const right = this.queue.shift()!;
 
-      const session = new GameSession(left, right, (id) => this.sessions.delete(id));
+      const session = new GameSession(left, right, (id) => {
+        this.sessions.delete(id);
+        this.playerSession.delete(left.data.playerId);
+        this.playerSession.delete(right.data.playerId);
+      });
       this.sessions.set(session.id, session);
+      this.playerSession.set(left.data.playerId, session.id);
+      this.playerSession.set(right.data.playerId, session.id);
 
       left.data.sessionId = session.id;
       right.data.sessionId = session.id;
