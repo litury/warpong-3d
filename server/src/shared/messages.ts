@@ -35,7 +35,7 @@ export type PaddleDirection = "Up" | "Down" | "Idle";
 export type ServerMessage =
   | { type: "PlayerSync"; coins: number; mmr: number; upgrades: Record<string, number>; paddleColor: string | null; ballTrail: string | null; totalOnlineWins: number; winStreak: number }
   | { type: "QueueJoined" }
-  | { type: "MatchFound"; side: PlayerSide; opponentCosmetics: PlayerCosmetics; opponentUpgrades: PlayerUpgrades; opponentName: string; stake: number; mmr: number; opponentMmr: number; opponentCoins: number }
+  | { type: "MatchFound"; side: PlayerSide; opponentCosmetics: PlayerCosmetics; opponentUpgrades: PlayerUpgrades; opponentName: string; stake: number; mmr: number; opponentMmr: number }
   | { type: "GameStateUpdate"; ball: BallState; leftPaddle: PaddleState; rightPaddle: PaddleState; score: ScoreState }
   | { type: "GameEvent"; event: GameEvent }
   | { type: "GameOver"; winner: PlayerSide; reward: number; mmr: number; mmrChange: number; coins: number }

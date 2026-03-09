@@ -32,7 +32,7 @@ let game: Game | null = null;
 let input: InputManager;
 const ws = new WsClient();
 const sdk = new YandexSdk();
-const matchResult: MatchResult = { playerSide: null, winner: null, opponentCosmetics: null, opponentUpgrades: null, opponentName: null, opponentCoins: null, stake: null, reward: null, coins: null, mmr: null, opponentMmr: null, mmrChange: null };
+const matchResult: MatchResult = { playerSide: null, winner: null, opponentCosmetics: null, opponentUpgrades: null, opponentName: null, stake: null, reward: null, coins: null, mmr: null, opponentMmr: null, mmrChange: null };
 let gameAssets: GameAssets | null = null;
 let lastCoinsEarned = 0;
 let onlineCount = 0;
@@ -258,12 +258,12 @@ function setState(newState: GameState) {
       if (mode === GameMode.Online) {
         updateHudStake(matchResult.stake ?? STAKE);
         updateHudStreak(winStreak);
-        updateHudOpponentInfo(matchResult.opponentUpgrades, matchResult.opponentCoins, matchResult.opponentMmr);
+        updateHudOpponentInfo(matchResult.opponentUpgrades, matchResult.opponentMmr);
         showQuickChatBar(true);
       } else {
         updateHudStake(null);
         updateHudStreak(0);
-        updateHudOpponentInfo(null, null, null);
+        updateHudOpponentInfo(null, null);
         showQuickChatBar(false);
       }
       break;
@@ -306,7 +306,6 @@ function resetMatchResult() {
   matchResult.opponentCosmetics = null;
   matchResult.opponentUpgrades = null;
   matchResult.opponentName = null;
-  matchResult.opponentCoins = null;
   matchResult.stake = null;
   matchResult.reward = null;
   matchResult.coins = null;

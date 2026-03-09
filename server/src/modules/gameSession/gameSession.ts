@@ -62,11 +62,8 @@ export class GameSession {
 
     const leftMmr = this.leftPlayer.data.mmr;
     const rightMmr = this.rightPlayer.data.mmr;
-    const leftCoins = this.leftPlayer.data.coins;
-    const rightCoins = this.rightPlayer.data.coins;
-
-    this.send(this.leftPlayer, { type: "MatchFound", side: "Left", opponentCosmetics: leftCos, opponentUpgrades: leftUpg, opponentName: this.rightPlayer.data.playerName, stake: STAKE, mmr: leftMmr, opponentMmr: rightMmr, opponentCoins: rightCoins });
-    this.send(this.rightPlayer, { type: "MatchFound", side: "Right", opponentCosmetics: rightCos, opponentUpgrades: rightUpg, opponentName: this.leftPlayer.data.playerName, stake: STAKE, mmr: rightMmr, opponentMmr: leftMmr, opponentCoins: leftCoins });
+    this.send(this.leftPlayer, { type: "MatchFound", side: "Left", opponentCosmetics: leftCos, opponentUpgrades: leftUpg, opponentName: this.rightPlayer.data.playerName, stake: STAKE, mmr: leftMmr, opponentMmr: rightMmr });
+    this.send(this.rightPlayer, { type: "MatchFound", side: "Right", opponentCosmetics: rightCos, opponentUpgrades: rightUpg, opponentName: this.leftPlayer.data.playerName, stake: STAKE, mmr: rightMmr, opponentMmr: leftMmr });
 
     this.tickTimer = setInterval(() => this.gameTick(), TICK_INTERVAL_MS);
   }
