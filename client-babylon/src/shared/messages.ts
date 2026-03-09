@@ -17,6 +17,7 @@ export type QuickChatId = "gg" | "nice" | "wow" | "glhf" | "oops" | "rematch";
 
 // Client -> Server
 export type ClientMessage =
+  | { type: "Auth"; signature: string; uniqueId: string; name: string }
   | { type: "JoinQueue" }
   | { type: "LeaveQueue" }
   | { type: "PlayerInput"; direction: PaddleDirection }
