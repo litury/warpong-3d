@@ -460,7 +460,6 @@ export function updateHudUpgrades(owned: OwnedUpgrades) {
 
 export function updateHudOpponentInfo(
   opponentUpgrades: PlayerUpgrades | null,
-  opponentCoins: number | null,
   opponentMmr: number | null,
 ) {
   const el = document.getElementById("hud-opponent-info");
@@ -486,14 +485,5 @@ export function updateHudOpponentInfo(
     mmrBadge.textContent = `${getRankLabel(opponentMmr)}`;
     mmrBadge.style.color = "#aaf";
     el.appendChild(mmrBadge);
-  }
-
-  // Opponent coins
-  if (opponentCoins != null) {
-    const coinBadge = document.createElement("div");
-    coinBadge.className = "hud-badge";
-    coinBadge.textContent = `${opponentCoins}`;
-    coinBadge.style.color = "#ffd700";
-    el.appendChild(coinBadge);
   }
 }

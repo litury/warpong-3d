@@ -8,7 +8,6 @@ export interface MatchResult {
   opponentCosmetics: PlayerCosmetics | null;
   opponentUpgrades: PlayerUpgrades | null;
   opponentName: string | null;
-  opponentCoins: number | null;
   stake: number | null;
   reward: number | null;
   coins: number | null;
@@ -57,7 +56,6 @@ export function processServerMessages(
         matchResult.opponentCosmetics = msg.opponentCosmetics;
         matchResult.opponentUpgrades = msg.opponentUpgrades;
         matchResult.opponentName = msg.opponentName;
-        matchResult.opponentCoins = msg.opponentCoins;
         matchResult.stake = msg.stake;
         matchResult.mmr = msg.mmr;
         matchResult.opponentMmr = msg.opponentMmr;
