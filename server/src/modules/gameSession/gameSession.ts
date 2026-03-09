@@ -82,31 +82,10 @@ export class GameSession {
   handleDisconnect(playerId: string): void {
     const opponent =
       playerId === this.leftPlayer.data.playerId ? this.rightPlayer : this.leftPlayer;
+    const disconnected =
+      playerId === this.leftPlayer.data.playerId ? this.leftPlayer : this.rightPlayer;
 
-    const winReward = Math.floor(STAKE * 2 * (1 - STAKE_COMMISSION));
-
-    const winnerId = opponent.data.playerId;
-    const loserId = playerId;
-    const elo = calcElo(opponent.data.mmr, this.getPlayerMmrById(loserId));
-
-    // Persist to DB
-    updateMmr(winnerId, elo.winnerNew);
-    updateMmr(loserId, elo.loserNew);
-    opponent.data.mmr = elo.winnerNew;
-
-    const winnerNewCoins = addCoins(winnerId, winReward);
-    addCoins(loserId, -STAKE);
-    opponent.data.coins = winnerNewCoins;
-
-    // Update streaks
-    const winnerRecord = getPlayer(winnerId);
-    if (winnerRecord) {
-      updateStreak(winnerId, winnerRecord.winStreak + 1, winnerRecord.totalOnlineWins + 1);
-    }
-    const loserRecord = getPlayer(loserId);
-    if (loserRecord) {
-      updateStreak(loserId, 0, loserRecord.totalOnlineWins);
-    }
+    const { winReward, winnerNewCoins } = this.rewardPlayers(opponent, disconnected);
 
     this.send(opponent, { type: "OpponentDisconnected", reward: winReward, coins: winnerNewCoins });
     this.stop();
@@ -125,10 +104,36 @@ export class GameSession {
     );
   }
 
-  private getPlayerMmrById(playerId: string): number {
-    if (playerId === this.leftPlayer.data.playerId) return this.leftPlayer.data.mmr;
-    if (playerId === this.rightPlayer.data.playerId) return this.rightPlayer.data.mmr;
-    return 1000;
+  private rewardPlayers(
+    winnerWs: ServerWebSocket<PlayerData>,
+    loserWs: ServerWebSocket<PlayerData>,
+  ): { winReward: number; elo: ReturnType<typeof calcElo>; winnerNewCoins: number; loserNewCoins: number } {
+    const winReward = Math.floor(STAKE * 2 * (1 - STAKE_COMMISSION));
+    const winnerId = winnerWs.data.playerId;
+    const loserId = loserWs.data.playerId;
+
+    const elo = calcElo(winnerWs.data.mmr, loserWs.data.mmr);
+    updateMmr(winnerId, elo.winnerNew);
+    updateMmr(loserId, elo.loserNew);
+
+    const winnerNewCoins = addCoins(winnerId, winReward);
+    const loserNewCoins = addCoins(loserId, -STAKE);
+
+    const winnerRecord = getPlayer(winnerId);
+    if (winnerRecord) {
+      updateStreak(winnerId, winnerRecord.winStreak + 1, winnerRecord.totalOnlineWins + 1);
+    }
+    const loserRecord = getPlayer(loserId);
+    if (loserRecord) {
+      updateStreak(loserId, 0, loserRecord.totalOnlineWins);
+    }
+
+    winnerWs.data.mmr = elo.winnerNew;
+    loserWs.data.mmr = elo.loserNew;
+    winnerWs.data.coins = winnerNewCoins;
+    loserWs.data.coins = loserNewCoins;
+
+    return { winReward, elo, winnerNewCoins, loserNewCoins };
   }
 
   private gameTick(): void {
@@ -151,34 +156,13 @@ export class GameSession {
 
     // Check game over
     if (result.gameOver && result.winner) {
-      const winReward = Math.floor(STAKE * 2 * (1 - STAKE_COMMISSION));
-      const loseReward = -STAKE;
-      const leftReward = result.winner === "Left" ? winReward : loseReward;
-      const rightReward = result.winner === "Right" ? winReward : loseReward;
-
-      const winnerId = result.winner === "Left" ? this.leftPlayer.data.playerId : this.rightPlayer.data.playerId;
-      const loserId = result.winner === "Left" ? this.rightPlayer.data.playerId : this.leftPlayer.data.playerId;
       const winnerWs = result.winner === "Left" ? this.leftPlayer : this.rightPlayer;
       const loserWs = result.winner === "Left" ? this.rightPlayer : this.leftPlayer;
 
-      const elo = calcElo(winnerWs.data.mmr, loserWs.data.mmr);
+      const { winReward, elo, winnerNewCoins, loserNewCoins } = this.rewardPlayers(winnerWs, loserWs);
 
-      // Persist to DB
-      updateMmr(winnerId, elo.winnerNew);
-      updateMmr(loserId, elo.loserNew);
-      const winnerNewCoins = addCoins(winnerId, winReward);
-      const loserNewCoins = addCoins(loserId, loseReward);
-
-      // Update streaks
-      const winnerRecord = getPlayer(winnerId);
-      if (winnerRecord) {
-        updateStreak(winnerId, winnerRecord.winStreak + 1, winnerRecord.totalOnlineWins + 1);
-      }
-      const loserRecord = getPlayer(loserId);
-      if (loserRecord) {
-        updateStreak(loserId, 0, loserRecord.totalOnlineWins);
-      }
-
+      const leftReward = result.winner === "Left" ? winReward : -STAKE;
+      const rightReward = result.winner === "Right" ? winReward : -STAKE;
       const leftMmr = result.winner === "Left" ? elo.winnerNew : elo.loserNew;
       const rightMmr = result.winner === "Right" ? elo.winnerNew : elo.loserNew;
       const leftMmrChange = result.winner === "Left" ? elo.change : -elo.change;
