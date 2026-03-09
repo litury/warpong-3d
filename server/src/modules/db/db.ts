@@ -93,6 +93,56 @@ export function updateStreak(id: string, winStreak: number, totalOnlineWins: num
   stmtUpdateStreak.run(winStreak, totalOnlineWins, id);
 }
 
+export interface SettleGameResult {
+  winnerCoins: number;
+  loserCoins: number;
+  winnerStreak: number;
+  winnerTotalWins: number;
+}
+
+const settleGameTx = db.transaction(
+  (
+    winnerId: string,
+    loserId: string,
+    winnerMmr: number,
+    loserMmr: number,
+    coinsDelta: number,
+    loseCoinsDelta: number,
+  ): SettleGameResult => {
+    stmtUpdateMmr.run(Math.max(0, winnerMmr), winnerId);
+    stmtUpdateMmr.run(Math.max(0, loserMmr), loserId);
+
+    stmtUpdateCoins.run(coinsDelta, winnerId);
+    stmtUpdateCoins.run(loseCoinsDelta, loserId);
+
+    const winnerRow = stmtGet.get(winnerId)!;
+    const loserRow = stmtGet.get(loserId)!;
+
+    const newWinnerStreak = winnerRow.win_streak + 1;
+    const newWinnerTotalWins = winnerRow.total_online_wins + 1;
+    stmtUpdateStreak.run(newWinnerStreak, newWinnerTotalWins, winnerId);
+    stmtUpdateStreak.run(0, loserRow.total_online_wins, loserId);
+
+    return {
+      winnerCoins: winnerRow.coins,
+      loserCoins: loserRow.coins,
+      winnerStreak: newWinnerStreak,
+      winnerTotalWins: newWinnerTotalWins,
+    };
+  },
+);
+
+export function settleGame(
+  winnerId: string,
+  loserId: string,
+  winnerMmr: number,
+  loserMmr: number,
+  coinsDelta: number,
+  loseCoinsDelta: number,
+): SettleGameResult {
+  return settleGameTx(winnerId, loserId, winnerMmr, loserMmr, coinsDelta, loseCoinsDelta);
+}
+
 export function updateUpgrades(id: string, upgrades: Record<string, number>, newCoins: number): void {
   stmtUpdateUpgrades.run(JSON.stringify(upgrades), Math.max(0, newCoins), id);
 }

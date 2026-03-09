@@ -2,7 +2,7 @@ import type { ServerWebSocket } from "bun";
 import { TICK_INTERVAL_MS } from "../../config";
 import type { ServerMessage, PaddleDirection, PlayerSide, PlayerCosmetics, PlayerUpgrades, QuickChatId } from "../../shared";
 import { createInitialState, tick, type SimulationState } from "./parts";
-import { getPlayer, addCoins, updateMmr, updateStreak } from "../db";
+import { settleGame } from "../db";
 
 export interface PlayerConnection {
   ws: ServerWebSocket<PlayerData>;
@@ -89,26 +89,12 @@ export class GameSession {
     const loserId = playerId;
     const elo = calcElo(opponent.data.mmr, this.getPlayerMmrById(loserId));
 
-    // Persist to DB
-    updateMmr(winnerId, elo.winnerNew);
-    updateMmr(loserId, elo.loserNew);
+    // Persist to DB (atomic transaction)
+    const result = settleGame(winnerId, loserId, elo.winnerNew, elo.loserNew, winReward, -STAKE);
     opponent.data.mmr = elo.winnerNew;
+    opponent.data.coins = result.winnerCoins;
 
-    const winnerNewCoins = addCoins(winnerId, winReward);
-    addCoins(loserId, -STAKE);
-    opponent.data.coins = winnerNewCoins;
-
-    // Update streaks
-    const winnerRecord = getPlayer(winnerId);
-    if (winnerRecord) {
-      updateStreak(winnerId, winnerRecord.winStreak + 1, winnerRecord.totalOnlineWins + 1);
-    }
-    const loserRecord = getPlayer(loserId);
-    if (loserRecord) {
-      updateStreak(loserId, 0, loserRecord.totalOnlineWins);
-    }
-
-    this.send(opponent, { type: "OpponentDisconnected", reward: winReward, coins: winnerNewCoins });
+    this.send(opponent, { type: "OpponentDisconnected", reward: winReward, coins: result.winnerCoins });
     this.stop();
   }
 
@@ -163,28 +149,15 @@ export class GameSession {
 
       const elo = calcElo(winnerWs.data.mmr, loserWs.data.mmr);
 
-      // Persist to DB
-      updateMmr(winnerId, elo.winnerNew);
-      updateMmr(loserId, elo.loserNew);
-      const winnerNewCoins = addCoins(winnerId, winReward);
-      const loserNewCoins = addCoins(loserId, loseReward);
-
-      // Update streaks
-      const winnerRecord = getPlayer(winnerId);
-      if (winnerRecord) {
-        updateStreak(winnerId, winnerRecord.winStreak + 1, winnerRecord.totalOnlineWins + 1);
-      }
-      const loserRecord = getPlayer(loserId);
-      if (loserRecord) {
-        updateStreak(loserId, 0, loserRecord.totalOnlineWins);
-      }
+      // Persist to DB (atomic transaction)
+      const settled = settleGame(winnerId, loserId, elo.winnerNew, elo.loserNew, winReward, loseReward);
 
       const leftMmr = result.winner === "Left" ? elo.winnerNew : elo.loserNew;
       const rightMmr = result.winner === "Right" ? elo.winnerNew : elo.loserNew;
       const leftMmrChange = result.winner === "Left" ? elo.change : -elo.change;
       const rightMmrChange = result.winner === "Right" ? elo.change : -elo.change;
-      const leftCoins = result.winner === "Left" ? winnerNewCoins : loserNewCoins;
-      const rightCoins = result.winner === "Right" ? winnerNewCoins : loserNewCoins;
+      const leftCoins = result.winner === "Left" ? settled.winnerCoins : settled.loserCoins;
+      const rightCoins = result.winner === "Right" ? settled.winnerCoins : settled.loserCoins;
 
       this.send(this.leftPlayer, { type: "GameOver", winner: result.winner, reward: leftReward, mmr: leftMmr, mmrChange: leftMmrChange, coins: leftCoins });
       this.send(this.rightPlayer, { type: "GameOver", winner: result.winner, reward: rightReward, mmr: rightMmr, mmrChange: rightMmrChange, coins: rightCoins });

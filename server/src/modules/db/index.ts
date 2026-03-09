@@ -8,5 +8,7 @@ export {
   updateUpgrades,
   updateCosmetics,
   getLeaderboard,
+  settleGame,
   type PlayerRecord,
+  type SettleGameResult,
 } from "./db";
