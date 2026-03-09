@@ -32,6 +32,7 @@ export interface LeaderboardEntry {
 export interface PlayerInfo {
   name: string;
   id: string;
+  signature: string;
   isAuthorized: boolean;
 }
 
@@ -102,6 +103,7 @@ export class YandexSdk {
           this.player = {
             name: msg.name as string,
             id: msg.id as string,
+            signature: msg.signature as string,
             isAuthorized: msg.isAuthorized as boolean,
           };
           callbacks.onPlayerInfo?.(this.player);

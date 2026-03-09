@@ -88,6 +88,17 @@ Bun.serve<PlayerData>({
       }
 
       switch (msg.type) {
+        case "Auth": {
+          ws.data.playerId = msg.uniqueId;
+          ws.data.playerName = msg.name || ws.data.playerName;
+          const authPlayer = getOrCreatePlayer(ws.data.playerId, ws.data.playerName);
+          ws.data.coins = authPlayer.coins;
+          ws.data.mmr = authPlayer.mmr;
+          sendPlayerSync(ws, authPlayer);
+          console.log(`Player authenticated: ${ws.data.playerId} (${ws.data.playerName})`);
+          break;
+        }
+
         case "JoinQueue": {
           const player = getPlayer(ws.data.playerId);
           if (!player || player.coins < STAKE) {

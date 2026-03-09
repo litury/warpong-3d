@@ -1,6 +1,7 @@
 import type { ClientMessage, QuickChatId, PaddleDirection } from "../shared";
 
 const VALID_TYPES = new Set([
+  "Auth",
   "JoinQueue",
   "LeaveQueue",
   "PlayerInput",
@@ -22,6 +23,12 @@ export function validateMessage(raw: unknown): ClientMessage | null {
   if (typeof obj.type !== "string" || !VALID_TYPES.has(obj.type)) return null;
 
   switch (obj.type) {
+    case "Auth":
+      if (typeof obj.signature !== "string") return null;
+      if (typeof obj.uniqueId !== "string" || obj.uniqueId === "") return null;
+      if (typeof obj.name !== "string") return null;
+      return { type: "Auth", signature: obj.signature, uniqueId: obj.uniqueId, name: obj.name };
+
     case "JoinQueue":
     case "LeaveQueue":
       return { type: obj.type } as ClientMessage;
