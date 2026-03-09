@@ -123,10 +123,8 @@ async function main() {
   }
 
   // Init Yandex SDK (for ads, IAP, language)
+  // WS connect happens after player_info is received (see onPlayerInfo below)
   sdk.init();
-
-  // Connect to server (passive, no queue join)
-  ws.connectPassive();
 
   // Wire up UI buttons
   setupButtons();
@@ -144,6 +142,14 @@ async function main() {
         setLocale(lang);
         applyDomTranslations();
         updateMenuCoins(wallet.coins);
+      },
+      onPlayerInfo: (info) => {
+        ws.setAuthPayload({
+          signature: info.signature,
+          uniqueId: info.id,
+          name: info.name,
+        });
+        ws.connectPassive();
       },
       onRewardedGranted: () => {
         // Tell server to add coins
