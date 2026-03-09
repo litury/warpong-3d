@@ -1,7 +1,8 @@
 import type { ServerWebSocket } from "bun";
 import { TICK_INTERVAL_MS } from "../../config";
-import type { ServerMessage, PaddleDirection, PlayerSide, PlayerCosmetics, PlayerUpgrades } from "../../shared";
+import type { ServerMessage, PaddleDirection, PlayerSide, PlayerCosmetics, PlayerUpgrades, QuickChatId } from "../../shared";
 import { createInitialState, tick, type SimulationState } from "./parts";
+import { getPlayer, addCoins, updateMmr, updateStreak } from "../db";
 
 export interface PlayerConnection {
   ws: ServerWebSocket<PlayerData>;
@@ -11,8 +12,23 @@ export interface PlayerConnection {
 export interface PlayerData {
   sessionId: string | null;
   playerId: string;
+  playerName: string;
   cosmetics: PlayerCosmetics | null;
   upgrades: PlayerUpgrades | null;
+  coins: number;
+  mmr: number;
+}
+
+export const STAKE = 10;
+export const STAKE_COMMISSION = 0.1;
+
+// --- ELO ---
+const K_FACTOR = 32;
+
+function calcElo(winnerMmr: number, loserMmr: number): { winnerNew: number; loserNew: number; change: number } {
+  const expected = 1 / (1 + Math.pow(10, (loserMmr - winnerMmr) / 400));
+  const change = Math.round(K_FACTOR * (1 - expected));
+  return { winnerNew: winnerMmr + change, loserNew: Math.max(0, loserMmr - change), change };
 }
 
 export class GameSession {
@@ -44,8 +60,13 @@ export class GameSession {
     const leftUpg = this.rightPlayer.data.upgrades ?? this.defaultUpgrades;
     const rightUpg = this.leftPlayer.data.upgrades ?? this.defaultUpgrades;
 
-    this.send(this.leftPlayer, { type: "MatchFound", side: "Left", opponentCosmetics: leftCos, opponentUpgrades: leftUpg });
-    this.send(this.rightPlayer, { type: "MatchFound", side: "Right", opponentCosmetics: rightCos, opponentUpgrades: rightUpg });
+    const leftMmr = this.leftPlayer.data.mmr;
+    const rightMmr = this.rightPlayer.data.mmr;
+    const leftCoins = this.leftPlayer.data.coins;
+    const rightCoins = this.rightPlayer.data.coins;
+
+    this.send(this.leftPlayer, { type: "MatchFound", side: "Left", opponentCosmetics: leftCos, opponentUpgrades: leftUpg, opponentName: this.rightPlayer.data.playerName, stake: STAKE, mmr: leftMmr, opponentMmr: rightMmr, opponentCoins: rightCoins });
+    this.send(this.rightPlayer, { type: "MatchFound", side: "Right", opponentCosmetics: rightCos, opponentUpgrades: rightUpg, opponentName: this.leftPlayer.data.playerName, stake: STAKE, mmr: rightMmr, opponentMmr: leftMmr, opponentCoins: leftCoins });
 
     this.tickTimer = setInterval(() => this.gameTick(), TICK_INTERVAL_MS);
   }
@@ -62,8 +83,39 @@ export class GameSession {
     const opponent =
       playerId === this.leftPlayer.data.playerId ? this.rightPlayer : this.leftPlayer;
 
-    this.send(opponent, { type: "OpponentDisconnected" });
+    const winReward = Math.floor(STAKE * 2 * (1 - STAKE_COMMISSION));
+
+    const winnerId = opponent.data.playerId;
+    const loserId = playerId;
+    const elo = calcElo(opponent.data.mmr, this.getPlayerMmrById(loserId));
+
+    // Persist to DB
+    updateMmr(winnerId, elo.winnerNew);
+    updateMmr(loserId, elo.loserNew);
+    opponent.data.mmr = elo.winnerNew;
+
+    const winnerNewCoins = addCoins(winnerId, winReward);
+    addCoins(loserId, -STAKE);
+    opponent.data.coins = winnerNewCoins;
+
+    // Update streaks
+    const winnerRecord = getPlayer(winnerId);
+    if (winnerRecord) {
+      updateStreak(winnerId, winnerRecord.winStreak + 1, winnerRecord.totalOnlineWins + 1);
+    }
+    const loserRecord = getPlayer(loserId);
+    if (loserRecord) {
+      updateStreak(loserId, 0, loserRecord.totalOnlineWins);
+    }
+
+    this.send(opponent, { type: "OpponentDisconnected", reward: winReward, coins: winnerNewCoins });
     this.stop();
+  }
+
+  relayChat(playerId: string, chatId: QuickChatId): void {
+    const opponent =
+      playerId === this.leftPlayer.data.playerId ? this.rightPlayer : this.leftPlayer;
+    this.send(opponent, { type: "OpponentChat", chatId });
   }
 
   hasPlayer(playerId: string): boolean {
@@ -71,6 +123,12 @@ export class GameSession {
       this.leftPlayer.data.playerId === playerId ||
       this.rightPlayer.data.playerId === playerId
     );
+  }
+
+  private getPlayerMmrById(playerId: string): number {
+    if (playerId === this.leftPlayer.data.playerId) return this.leftPlayer.data.mmr;
+    if (playerId === this.rightPlayer.data.playerId) return this.rightPlayer.data.mmr;
+    return 1000;
   }
 
   private gameTick(): void {
@@ -93,7 +151,43 @@ export class GameSession {
 
     // Check game over
     if (result.gameOver && result.winner) {
-      this.broadcast({ type: "GameOver", winner: result.winner });
+      const winReward = Math.floor(STAKE * 2 * (1 - STAKE_COMMISSION));
+      const loseReward = -STAKE;
+      const leftReward = result.winner === "Left" ? winReward : loseReward;
+      const rightReward = result.winner === "Right" ? winReward : loseReward;
+
+      const winnerId = result.winner === "Left" ? this.leftPlayer.data.playerId : this.rightPlayer.data.playerId;
+      const loserId = result.winner === "Left" ? this.rightPlayer.data.playerId : this.leftPlayer.data.playerId;
+      const winnerWs = result.winner === "Left" ? this.leftPlayer : this.rightPlayer;
+      const loserWs = result.winner === "Left" ? this.rightPlayer : this.leftPlayer;
+
+      const elo = calcElo(winnerWs.data.mmr, loserWs.data.mmr);
+
+      // Persist to DB
+      updateMmr(winnerId, elo.winnerNew);
+      updateMmr(loserId, elo.loserNew);
+      const winnerNewCoins = addCoins(winnerId, winReward);
+      const loserNewCoins = addCoins(loserId, loseReward);
+
+      // Update streaks
+      const winnerRecord = getPlayer(winnerId);
+      if (winnerRecord) {
+        updateStreak(winnerId, winnerRecord.winStreak + 1, winnerRecord.totalOnlineWins + 1);
+      }
+      const loserRecord = getPlayer(loserId);
+      if (loserRecord) {
+        updateStreak(loserId, 0, loserRecord.totalOnlineWins);
+      }
+
+      const leftMmr = result.winner === "Left" ? elo.winnerNew : elo.loserNew;
+      const rightMmr = result.winner === "Right" ? elo.winnerNew : elo.loserNew;
+      const leftMmrChange = result.winner === "Left" ? elo.change : -elo.change;
+      const rightMmrChange = result.winner === "Right" ? elo.change : -elo.change;
+      const leftCoins = result.winner === "Left" ? winnerNewCoins : loserNewCoins;
+      const rightCoins = result.winner === "Right" ? winnerNewCoins : loserNewCoins;
+
+      this.send(this.leftPlayer, { type: "GameOver", winner: result.winner, reward: leftReward, mmr: leftMmr, mmrChange: leftMmrChange, coins: leftCoins });
+      this.send(this.rightPlayer, { type: "GameOver", winner: result.winner, reward: rightReward, mmr: rightMmr, mmrChange: rightMmrChange, coins: rightCoins });
       this.stop();
     }
   }

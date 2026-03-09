@@ -1,1 +1,1 @@
-export { GameSession, type PlayerData } from "./gameSession";
+export { GameSession, STAKE, STAKE_COMMISSION, type PlayerData } from "./gameSession";

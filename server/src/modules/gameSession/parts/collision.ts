@@ -4,11 +4,12 @@ import {
   BALL_SPEED_INCREMENT,
   BALL_MAX_SPEED,
   PADDLE_WIDTH,
+  WALL_INSET,
 } from "../../../config";
 import type { BallState } from "../../../shared";
 
-const WALL_THICKNESS = 5;
 const HALF_H = ARENA_HEIGHT / 2;
+const WALL_BOUND = HALF_H - WALL_INSET;
 const HALF_BALL = BALL_SIZE / 2;
 
 export interface CollisionResult {
@@ -19,13 +20,13 @@ export interface CollisionResult {
 export function checkWallCollisions(ball: BallState): boolean {
   let hit = false;
 
-  if (ball.y + HALF_BALL > HALF_H - WALL_THICKNESS) {
+  if (ball.y + HALF_BALL > WALL_BOUND) {
     ball.vy = -Math.abs(ball.vy);
-    ball.y = HALF_H - WALL_THICKNESS - HALF_BALL;
+    ball.y = WALL_BOUND - HALF_BALL;
     hit = true;
-  } else if (ball.y - HALF_BALL < -HALF_H + WALL_THICKNESS) {
+  } else if (ball.y - HALF_BALL < -WALL_BOUND) {
     ball.vy = Math.abs(ball.vy);
-    ball.y = -HALF_H + WALL_THICKNESS + HALF_BALL;
+    ball.y = -WALL_BOUND + HALF_BALL;
     hit = true;
   }
 

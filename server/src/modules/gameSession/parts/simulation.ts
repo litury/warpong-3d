@@ -8,6 +8,7 @@ import {
   PADDLE_MARGIN,
   WIN_SCORE,
   TICK_INTERVAL_MS,
+  WALL_INSET,
 } from "../../../config";
 import type { BallState, PaddleDirection, ScoreState, GameEvent, PlayerUpgrades } from "../../../shared";
 import { checkWallCollisions, checkPaddleCollision } from "./collision";
@@ -126,7 +127,7 @@ function movePaddle(state: SimulationState, side: "left" | "right", dt: number):
   const input = side === "left" ? state.leftInput : state.rightInput;
   const speed = side === "left" ? state.leftPaddleSpeed : state.rightPaddleSpeed;
   const height = side === "left" ? state.leftPaddleHeight : state.rightPaddleHeight;
-  const bound = HALF_H - height / 2 - 5;
+  const bound = HALF_H - WALL_INSET - height / 2;
 
   let direction = 0;
   if (input === "Up") direction = 1;
