@@ -144,12 +144,13 @@ window.ysdk_load_data = function() {
 
 window.ysdk_get_player = function() {
     if (!window.__ysdk) { _push({ type: "player_err", msg: "SDK not ready" }); return; }
-    window.__ysdk.getPlayer({ scopes: false }).then(function(player) {
+    window.__ysdk.getPlayer({ signed: true, scopes: false }).then(function(player) {
         _push({
             type: "player_info",
             name: player.getName() || "",
             id: player.getUniqueID() || "",
-            isAuthorized: player.getMode() !== "lite"
+            isAuthorized: player.isAuthorized(),
+            signature: player.signature || ""
         });
     }).catch(function(err) {
         _push({ type: "player_err", msg: String(err) });
