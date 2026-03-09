@@ -23,7 +23,29 @@ const IAP_PRODUCTS: Record<string, number> = {
 
 let nextPlayerId = 1;
 
+let onlineCountDirty = false;
+let onlineCountTimer: ReturnType<typeof setTimeout> | null = null;
+const ONLINE_COUNT_INTERVAL = 5_000; // ms
+
 function broadcastOnlineCount() {
+  onlineCountDirty = true;
+  if (!onlineCountTimer) {
+    flushOnlineCount();
+    onlineCountTimer = setTimeout(onlineCountTick, ONLINE_COUNT_INTERVAL);
+  }
+}
+
+function onlineCountTick() {
+  if (onlineCountDirty) {
+    flushOnlineCount();
+    onlineCountTimer = setTimeout(onlineCountTick, ONLINE_COUNT_INTERVAL);
+  } else {
+    onlineCountTimer = null;
+  }
+}
+
+function flushOnlineCount() {
+  onlineCountDirty = false;
   const msg = JSON.stringify({ type: "OnlineCount", count: connectedSockets.size });
   for (const ws of connectedSockets) {
     try { ws.send(msg); } catch { /* disconnected */ }
