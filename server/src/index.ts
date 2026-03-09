@@ -9,6 +9,7 @@ import { handleFetch } from "./routes/http";
 import { handleBuyUpgrade, handleRewardCoins, handlePurchaseCoins, clearRewardCooldown } from "./handlers/purchase";
 import { handleEquipCosmetic } from "./handlers/cosmetic";
 import { validateMessage } from "./handlers/validate";
+import { verifyAuth } from "./handlers/auth";
 
 const matchmaking = new Matchmaking();
 const connectedSockets = new Set<ServerWebSocket<PlayerData>>();
@@ -62,17 +63,12 @@ Bun.serve<PlayerData>({
   },
   websocket: {
     open(ws) {
-      console.log(`Player connected: ${ws.data.playerId}`);
+      console.log(`WebSocket connected (awaiting auth)`);
       connectedSockets.add(ws);
       broadcastOnlineCount();
-
-      const player = getOrCreatePlayer(ws.data.playerId, ws.data.playerName);
-      ws.data.coins = player.coins;
-      ws.data.mmr = player.mmr;
-      sendPlayerSync(ws, player);
     },
 
-    message(ws, raw) {
+    async message(ws, raw) {
       let parsed: unknown;
       try {
         parsed = JSON.parse(typeof raw === "string" ? raw : new TextDecoder().decode(raw));
@@ -84,6 +80,35 @@ Bun.serve<PlayerData>({
       const msg: ClientMessage | null = validateMessage(parsed);
       if (!msg) {
         ws.send(JSON.stringify({ type: "Error", message: "invalid message" }));
+        return;
+      }
+
+      // Handle Auth before anything else
+      if (msg.type === "Auth") {
+        if (ws.data.authenticated) {
+          ws.send(JSON.stringify({ type: "Error", message: "already authenticated" }));
+          return;
+        }
+        const ok = await verifyAuth(msg.signature, msg.uniqueId);
+        if (!ok) {
+          ws.close(4001, "Auth failed");
+          return;
+        }
+        ws.data.playerId = msg.uniqueId;
+        ws.data.playerName = msg.name;
+        ws.data.authenticated = true;
+        console.log(`Player authenticated: ${ws.data.playerId} (${ws.data.playerName})`);
+
+        const player = getOrCreatePlayer(ws.data.playerId, ws.data.playerName);
+        ws.data.coins = player.coins;
+        ws.data.mmr = player.mmr;
+        sendPlayerSync(ws, player);
+        return;
+      }
+
+      // Block all other messages until authenticated
+      if (!ws.data.authenticated) {
+        ws.send(JSON.stringify({ type: "Error", message: "not authenticated" }));
         return;
       }
 

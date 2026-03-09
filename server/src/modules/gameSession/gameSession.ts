@@ -13,6 +13,7 @@ export interface PlayerData {
   sessionId: string | null;
   playerId: string;
   playerName: string;
+  authenticated: boolean;
   cosmetics: PlayerCosmetics | null;
   upgrades: PlayerUpgrades | null;
   coins: number;
