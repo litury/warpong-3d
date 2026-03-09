@@ -2,21 +2,28 @@ import { Application } from "pixi.js";
 import { ARENA_WIDTH, ARENA_HEIGHT, PADDLE_HEIGHT } from "./config";
 import { GameState, GameMode } from "./config/states";
 import { Game, InputManager } from "./modules/game";
+import { loadGameAssets } from "./modules/game/assets";
+import type { GameAssets } from "./modules/game/assets";
 import { WsClient, processServerMessages } from "./modules/network";
-import type { MatchResult } from "./modules/network";
+import type { MatchResult, PlayerSyncData } from "./modules/network";
 import {
-  showScreen, hideAllScreens, updateHudScore, updateHudCoins, updateHudUpgrades,
-  setupGameOver, renderShop, updateLobbyStatus,
+  showScreen, updateHudScore, updateHudUpgrades, updateHudOpponentInfo,
+  updateHudStake, updateHudStreak,
+  setupGameOver, showVsScreen, renderShop,
+  updateLobbyStatus, updateLobbyStake, updateLobbyTimer, updateLobbyTip,
+  updateMenuOnlineCount, updateMenuCoins, updateMenuMmr,
+  showQuickChatBar, showChatBubble, setupQuickChatButtons,
 } from "./modules/ui";
 import {
   createDefaultWallet, createDefaultOwned, createDefaultEquipped,
   getLevel, UpgradeId, UpgradeCategory,
 } from "./modules/shop/parts/data";
-import { computeEffectiveStats, awardCoins, tryBuyUpgrade, getPaddleColor, getTrailType } from "./modules/shop";
-import type { PlayerCosmetics, PlayerUpgrades } from "./shared/messages";
-import { markDirty, flushSaveIfNeeded, parseLoadOkData } from "./modules/shop/parts/save";
+import { computeEffectiveStats, awardCoins, getPaddleColor, getTrailType } from "./modules/shop";
 import { YandexSdk } from "./modules/yandex";
 import { setLocale, applyDomTranslations, t } from "./i18n";
+
+// --- Constants ---
+const STAKE = 10;
 
 // --- State ---
 let state = GameState.Menu;
@@ -25,12 +32,59 @@ let game: Game | null = null;
 let input: InputManager;
 const ws = new WsClient();
 const sdk = new YandexSdk();
-const matchResult: MatchResult = { playerSide: null, winner: null, opponentCosmetics: null, opponentUpgrades: null };
+const matchResult: MatchResult = { playerSide: null, winner: null, opponentCosmetics: null, opponentUpgrades: null, opponentName: null, opponentCoins: null, stake: null, reward: null, coins: null, mmr: null, opponentMmr: null, mmrChange: null };
+let gameAssets: GameAssets | null = null;
 let lastCoinsEarned = 0;
+let onlineCount = 0;
+let lobbyTimerInterval: ReturnType<typeof setInterval> | null = null;
+let lobbySeconds = 0;
 
 const wallet = createDefaultWallet();
 const owned = createDefaultOwned();
 const equipped = createDefaultEquipped();
+let totalOnlineWins = 0;
+let winStreak = 0;
+let playerMmr: number | null = null;
+
+// --- Lobby tips ---
+const TIPS_EN = [
+  "The ball speeds up with each paddle hit!",
+  "Hit the ball with the edge of your paddle to change its angle.",
+  "Upgrades from the shop work in online matches too!",
+  "Win streaks give you bonus coins!",
+];
+const TIPS_RU = [
+  "Мяч ускоряется с каждым ударом ракетки!",
+  "Ударьте мячом по краю ракетки, чтобы изменить угол.",
+  "Улучшения из магазина работают и в онлайн-матчах!",
+  "Серия побед даёт бонусные монеты!",
+];
+
+function getRandomTip(): string {
+  const tips = t("menu.title") === "ПОНГ" ? TIPS_RU : TIPS_EN;
+  return tips[Math.floor(Math.random() * tips.length)];
+}
+
+// --- PlayerSync handler ---
+function handlePlayerSync(data: PlayerSyncData) {
+  wallet.coins = data.coins;
+  playerMmr = data.mmr;
+  totalOnlineWins = data.totalOnlineWins;
+  winStreak = data.winStreak;
+
+  // Sync upgrades
+  for (const [key, level] of Object.entries(data.upgrades)) {
+    owned.levels[key] = level;
+  }
+
+  // Sync cosmetics
+  equipped.paddleColor = data.paddleColor as UpgradeId | null;
+  equipped.ballTrail = data.ballTrail as UpgradeId | null;
+
+  updateMenuCoins(wallet.coins);
+  updateMenuMmr(playerMmr);
+  console.log("[sync] PlayerSync: coins:", data.coins, "mmr:", data.mmr);
+}
 
 // --- PixiJS init ---
 const app = new Application();
@@ -60,8 +114,19 @@ async function main() {
   app.stage.y = ARENA_HEIGHT / 2;
   app.stage.scale.y = -1;
 
-  // Init Yandex SDK
+  // Load game assets
+  try {
+    gameAssets = await loadGameAssets();
+    console.log("[assets] Loaded mech, projectile, arena background");
+  } catch (e) {
+    console.warn("[assets] Failed to load game assets, using fallback graphics:", e);
+  }
+
+  // Init Yandex SDK (for ads, IAP, language)
   sdk.init();
+
+  // Connect to server (passive, no queue join)
+  ws.connectPassive();
 
   // Wire up UI buttons
   setupButtons();
@@ -73,16 +138,16 @@ async function main() {
   app.ticker.add((ticker) => {
     const dt = ticker.deltaTime / 60; // Convert to seconds
 
-    // Poll SDK
+    // Poll SDK (ads, IAP, language only)
     sdk.pollInbox({
       onInitOk: (lang) => {
         setLocale(lang);
         applyDomTranslations();
+        updateMenuCoins(wallet.coins);
       },
       onRewardedGranted: () => {
-        wallet.coins += 15;
-        updateHudCoins(wallet.coins);
-        markDirty();
+        // Tell server to add coins
+        ws.send({ type: "RewardCoins", amount: 15 });
       },
       onLeaderboardEntries: (entries) => {
         if (state === GameState.GameOver) {
@@ -90,36 +155,37 @@ async function main() {
           const playerWon = isOnline
             ? matchResult.winner === matchResult.playerSide
             : (game?.score.left ?? 0) > (game?.score.right ?? 0);
-          setupGameOver(playerWon, lastCoinsEarned, wallet.coins, isOnline, entries);
-        }
-      },
-      onLoadOk: (data) => {
-        const save = parseLoadOkData(data);
-        if (save) {
-          wallet.coins = save.wallet.coins;
-          Object.assign(owned.levels, save.owned.levels);
-          equipped.paddleColor = save.equipped.paddleColor;
-          equipped.ballTrail = save.equipped.ballTrail;
-          console.log("[save] loaded cloud data, coins:", wallet.coins);
+          setupGameOver(playerWon, lastCoinsEarned, wallet.coins, isOnline, entries, winStreak, matchResult.mmr, matchResult.mmrChange);
         }
       },
       onPurchaseOk: (productId, token) => {
         const amounts: Record<string, number> = { coins_100: 100, coins_500: 500, coins_1500: 1500 };
         const amount = amounts[productId] ?? 0;
-        wallet.coins += amount;
-        markDirty();
+        if (amount > 0) {
+          ws.send({ type: "RewardCoins", amount });
+        }
         window.ysdk_consume_purchase(token);
         console.log("[iap] purchased", productId, "+", amount, "coins");
       },
     });
 
-    // Process network messages (online mode)
+    // Process network messages
     if (ws.connected) {
       processServerMessages(ws, game, matchResult, {
+        onPlayerSync: handlePlayerSync,
         onQueueJoined: () => updateLobbyStatus(t("lobby.searching")),
         onMatchFound: (side) => {
           matchResult.playerSide = side;
-          startGame(GameMode.Online);
+          playerMmr = matchResult.mmr;
+          stopLobbyTimer();
+          const playerName = t("vs.you");
+          const opponentName = matchResult.opponentName ?? "???";
+          const stake = matchResult.stake ?? STAKE;
+          showVsScreen(playerName, opponentName, stake, matchResult.mmr, matchResult.opponentMmr);
+          state = GameState.Playing;
+          setTimeout(() => {
+            startGame(GameMode.Online);
+          }, 2500);
         },
         onGameOver: (winner) => {
           matchResult.winner = winner;
@@ -133,6 +199,13 @@ async function main() {
         onScoreUpdate: (left, right) => {
           updateHudScore(left, right);
         },
+        onOnlineCount: (count) => {
+          onlineCount = count;
+          updateMenuOnlineCount(count);
+        },
+        onOpponentChat: (chatId) => {
+          showChatBubble(chatId);
+        },
       });
 
       // Send input to server in online mode
@@ -145,9 +218,6 @@ async function main() {
     if (game && state === GameState.Playing) {
       game.update(dt);
     }
-
-    // Cloud save debounce
-    flushSaveIfNeeded(wallet, owned, equipped);
   });
 }
 
@@ -178,11 +248,24 @@ function setState(newState: GameState) {
   switch (state) {
     case GameState.Menu:
       showScreen("screen-menu");
+      updateMenuCoins(wallet.coins);
+      updateMenuMmr(playerMmr);
+      updateMenuOnlineCount(onlineCount);
       break;
     case GameState.Playing:
       showScreen("screen-hud");
-      updateHudCoins(wallet.coins);
       updateHudUpgrades(owned);
+      if (mode === GameMode.Online) {
+        updateHudStake(matchResult.stake ?? STAKE);
+        updateHudStreak(winStreak);
+        updateHudOpponentInfo(matchResult.opponentUpgrades, matchResult.opponentCoins, matchResult.opponentMmr);
+        showQuickChatBar(true);
+      } else {
+        updateHudStake(null);
+        updateHudStreak(0);
+        updateHudOpponentInfo(null, null, null);
+        showQuickChatBar(false);
+      }
       break;
     case GameState.GameOver:
       showScreen("screen-game-over");
@@ -190,6 +273,9 @@ function setState(newState: GameState) {
     case GameState.Lobby:
       showScreen("screen-lobby");
       updateLobbyStatus(t("lobby.connecting"));
+      updateLobbyStake(STAKE);
+      updateLobbyTip(getRandomTip());
+      startLobbyTimer();
       break;
     case GameState.Shop:
       showScreen("screen-shop");
@@ -198,25 +284,41 @@ function setState(newState: GameState) {
   }
 }
 
-function getMyCosmetics(): PlayerCosmetics {
-  return {
-    paddleColor: getPaddleColor(equipped),
-    trailType: getTrailType(equipped),
-    ballGlow: getLevel(owned, UpgradeId.BallGlow) > 0,
-  };
+function startLobbyTimer() {
+  lobbySeconds = 0;
+  updateLobbyTimer(0);
+  lobbyTimerInterval = setInterval(() => {
+    lobbySeconds++;
+    updateLobbyTimer(lobbySeconds);
+  }, 1000);
 }
 
-function getMyUpgrades(): PlayerUpgrades {
-  return {
-    paddleSpeedLevel: getLevel(owned, UpgradeId.PaddleSpeed),
-    paddleSizeLevel: getLevel(owned, UpgradeId.PaddleSize),
-    ballSpeedLevel: getLevel(owned, UpgradeId.BallStartSpeed),
-  };
+function stopLobbyTimer() {
+  if (lobbyTimerInterval) {
+    clearInterval(lobbyTimerInterval);
+    lobbyTimerInterval = null;
+  }
+}
+
+function resetMatchResult() {
+  matchResult.playerSide = null;
+  matchResult.winner = null;
+  matchResult.opponentCosmetics = null;
+  matchResult.opponentUpgrades = null;
+  matchResult.opponentName = null;
+  matchResult.opponentCoins = null;
+  matchResult.stake = null;
+  matchResult.reward = null;
+  matchResult.coins = null;
+  matchResult.mmr = null;
+  matchResult.opponentMmr = null;
+  matchResult.mmrChange = null;
 }
 
 function startGame(gameMode: GameMode) {
   mode = gameMode;
   matchResult.winner = null;
+  matchResult.reward = null;
 
   if (game) {
     game.destroy();
@@ -231,6 +333,7 @@ function startGame(gameMode: GameMode) {
   const opUpg = matchResult.opponentUpgrades;
 
   game = new Game(app.stage, input);
+  game.assets = gameAssets;
   game.stats = stats;
   game.paddleColor = paddleColor;
   game.opponentPaddleColor = opCos?.paddleColor ?? 0xffffff;
@@ -245,7 +348,7 @@ function startGame(gameMode: GameMode) {
     if (game) updateHudScore(game.score.left, game.score.right);
   };
 
-  game.onGameOver = (leftWon) => {
+  game.onGameOver = () => {
     finishGame();
   };
 
@@ -260,36 +363,49 @@ function finishGame() {
     ? matchResult.winner === matchResult.playerSide
     : (game?.score.left ?? 0) > (game?.score.right ?? 0);
 
-  lastCoinsEarned = awardCoins(wallet, mode, playerWon);
-  markDirty();
+  if (isOnline && matchResult.mmr != null) {
+    playerMmr = matchResult.mmr;
+  }
 
-  // Submit score to leaderboard
-  const maxScore = Math.max(game?.score.left ?? 0, game?.score.right ?? 0);
-  sdk.submitScore(maxScore);
+  if (isOnline && matchResult.coins != null) {
+    // Server already updated DB — just sync local state
+    wallet.coins = matchResult.coins;
+    lastCoinsEarned = matchResult.reward ?? 0;
+    if (playerWon) {
+      winStreak++;
+      totalOnlineWins++;
+    } else {
+      winStreak = 0;
+    }
+  } else {
+    // Solo mode: local reward
+    lastCoinsEarned = awardCoins(wallet, mode, playerWon);
+  }
+
   sdk.showFullscreenAd();
 
-  setupGameOver(playerWon, lastCoinsEarned, wallet.coins, isOnline, sdk.leaderboardEntries);
-  setState(GameState.GameOver);
+  game?.playGameOverAnimation(playerWon);
+
+  setTimeout(() => {
+    setupGameOver(playerWon, lastCoinsEarned, wallet.coins, isOnline, sdk.leaderboardEntries, winStreak, matchResult.mmr, matchResult.mmrChange);
+    setState(GameState.GameOver);
+  }, 1500);
 }
 
 function refreshShop() {
-  renderShop(wallet, owned, equipped,
-    (id) => {
-      if (tryBuyUpgrade(wallet, owned, id as UpgradeId)) {
-        markDirty();
-        refreshShop();
-      }
+  renderShop(wallet, owned, equipped, {
+    onBuy: (id) => {
+      // Send purchase request to server
+      ws.send({ type: "BuyUpgrade", upgradeId: id });
     },
-    (id) => {
+    onEquip: (id) => {
       const upgradeId = id as UpgradeId;
       const def = CATALOG_MAP[upgradeId];
       if (!def) return;
-      if (def === "PaddleColor") equipped.paddleColor = upgradeId;
-      else if (def === "BallTrail") equipped.ballTrail = upgradeId;
-      markDirty();
-      refreshShop();
+      const slot = def === "PaddleColor" ? "paddleColor" as const : "ballTrail" as const;
+      ws.send({ type: "EquipCosmetic", slot, itemId: id });
     },
-  );
+  });
 }
 
 // Map upgrade IDs to their equip slot
@@ -302,15 +418,18 @@ for (const item of CATALOG) {
 
 function setupButtons() {
   document.getElementById("btn-play")?.addEventListener("click", () => {
-    matchResult.playerSide = null;
-    matchResult.opponentCosmetics = null;
-    matchResult.opponentUpgrades = null;
+    resetMatchResult();
     startGame(GameMode.Solo);
   });
 
   document.getElementById("btn-online")?.addEventListener("click", () => {
+    if (wallet.coins < STAKE) {
+      alert(t("online.insufficientFunds"));
+      return;
+    }
+    resetMatchResult();
     setState(GameState.Lobby);
-    ws.connect(getMyCosmetics(), getMyUpgrades());
+    ws.joinQueue();
   });
 
   document.getElementById("btn-shop")?.addEventListener("click", () => {
@@ -319,17 +438,21 @@ function setupButtons() {
 
   document.getElementById("btn-play-again")?.addEventListener("click", () => {
     if (game) { game.destroy(); game = null; }
-    matchResult.playerSide = null;
-    matchResult.opponentCosmetics = null;
-    matchResult.opponentUpgrades = null;
+    resetMatchResult();
     startGame(GameMode.Solo);
   });
 
   document.getElementById("btn-new-opponent")?.addEventListener("click", () => {
     if (game) { game.destroy(); game = null; }
-    ws.close();
+    if (wallet.coins < STAKE) {
+      alert(t("online.insufficientFunds"));
+      setState(GameState.Menu);
+      return;
+    }
+    ws.send({ type: "LeaveQueue" });
+    resetMatchResult();
     setState(GameState.Lobby);
-    ws.connect(getMyCosmetics(), getMyUpgrades());
+    ws.joinQueue();
   });
 
   document.getElementById("btn-watch-ad")?.addEventListener("click", () => {
@@ -338,18 +461,22 @@ function setupButtons() {
 
   document.getElementById("btn-menu-from-gameover")?.addEventListener("click", () => {
     if (game) { game.destroy(); game = null; }
-    ws.close();
     setState(GameState.Menu);
   });
 
   document.getElementById("btn-cancel-lobby")?.addEventListener("click", () => {
     ws.send({ type: "LeaveQueue" });
-    ws.close();
+    stopLobbyTimer();
     setState(GameState.Menu);
   });
 
   document.getElementById("btn-shop-back")?.addEventListener("click", () => {
     setState(GameState.Menu);
+  });
+
+  // Quick chat
+  setupQuickChatButtons((chatId) => {
+    ws.send({ type: "QuickChat", chatId: chatId as import("./shared/messages").QuickChatId });
   });
 }
 

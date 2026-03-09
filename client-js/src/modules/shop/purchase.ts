@@ -5,7 +5,6 @@ import { GameMode } from "../../config/states";
 import { findUpgrade } from "./parts/catalog";
 import { getLevel, UpgradeId } from "./parts/data";
 import type { Wallet, OwnedUpgrades, EquippedCosmetics, EffectiveStats } from "./parts/data";
-
 export function tryBuyUpgrade(wallet: Wallet, owned: OwnedUpgrades, id: UpgradeId): boolean {
   const def = findUpgrade(id);
   if (!def) return false;

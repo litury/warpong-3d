@@ -1,13 +1,13 @@
 // Port of client/src/modules/game/parts/ai.rs
 
-import { ARENA_HEIGHT } from "../../../config";
+import { ARENA_HEIGHT, WALL_INSET } from "../../../config";
 
 export function updateAi(
   paddleY: number, paddleSpeed: number, paddleHeight: number,
   ballY: number, dt: number,
 ): number {
   const halfH = ARENA_HEIGHT / 2;
-  const bound = halfH - paddleHeight / 2 - 5;
+  const bound = halfH - WALL_INSET - paddleHeight / 2;
   const aiSpeed = paddleSpeed * 0.85;
   const diff = ballY - paddleY;
   const deadZone = 10;

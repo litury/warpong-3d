@@ -36,16 +36,16 @@
     /* HUD */
     #screen-hud {
       justify-content: flex-start; pointer-events: none;
-      flex-direction: row; padding: 15px 20px;
+      padding: 15px 20px;
     }
-    #screen-hud .hud-spacer { flex: 1; }
     #screen-hud #hud-score { font-size: 36px; font-weight: bold; }
-    #screen-hud #hud-coins { font-size: 18px; color: rgba(255, 215, 0, 0.6); }
-    #screen-hud .hud-right { flex: 1; text-align: right; }
-    #hud-upgrades {
-      position: absolute; bottom: 15px; left: 20px;
-      display: flex; gap: 8px; pointer-events: none;
+    #hud-player-info, #hud-opponent-info {
+      position: absolute; top: 35px;
+      display: flex; gap: 4px; flex-wrap: wrap;
+      pointer-events: none; font-size: 12px;
     }
+    #hud-player-info { left: 20px; }
+    #hud-opponent-info { right: 20px; text-align: right; flex-direction: row-reverse; }
     .hud-badge {
       background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3);
       border-radius: 4px; padding: 4px 8px; font-size: 14px; color: #fff;
@@ -82,6 +82,56 @@
     .shop-btn.equipped { border-color: #4a4; color: #4a4; }
     .shop-btn.maxed { border-color: #666; color: #666; }
 
+    /* Shop tabs */
+    #shop-tabs { display: flex; border-bottom: 1px solid #333; margin-bottom: 12px; width: 100%; max-width: 400px; }
+    .shop-tab { flex: 1; padding: 10px 4px; background: none; border: none; border-bottom: 2px solid transparent; color: #888; font-size: 13px; cursor: pointer; font-weight: bold; }
+    .shop-tab.active { border-bottom-color: #fff; color: #fff; }
+    .shop-tab:hover { color: #ccc; }
+    #shop-tab-content { width: 100%; max-width: 400px; }
+
+    /* Cosmetic grid */
+    .cosmetic-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px; }
+    .cosmetic-card {
+      aspect-ratio: 1; border-radius: 8px; border: 2px solid #333;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      cursor: pointer; padding: 4px; text-align: center; transition: border-color 0.2s;
+    }
+    .cosmetic-card:hover { border-color: #666; }
+    .cosmetic-card.owned { border-color: #4a4; }
+    .cosmetic-card.equipped { border-color: #fff; box-shadow: 0 0 8px rgba(255,255,255,0.3); }
+    .cosmetic-card .card-swatch { width: 24px; height: 24px; border-radius: 50%; margin-bottom: 4px; }
+    .cosmetic-card .card-label { font-size: 10px; color: #ccc; }
+    .cosmetic-card .card-price { font-size: 10px; color: #ffd700; }
+
+    /* Upgrade progress bars */
+    .upgrade-item { padding: 10px; margin: 4px 0; background: rgba(255,255,255,0.05); border-radius: 4px; }
+    .upgrade-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+    .upgrade-header strong { font-size: 14px; }
+    .upgrade-progress { height: 6px; background: #333; border-radius: 3px; margin: 4px 0 8px; }
+    .upgrade-progress-fill { height: 100%; background: #4af; border-radius: 3px; transition: width 0.3s; }
+
+    /* Quick Chat */
+    #quick-chat-bar {
+      position: absolute; bottom: 15px; right: 20px;
+      display: none; gap: 6px; pointer-events: auto;
+    }
+    #quick-chat-bar.active { display: flex; }
+    .qc-btn {
+      padding: 4px 10px; font-size: 12px; border: 1px solid rgba(255,255,255,0.3);
+      background: rgba(0,0,0,0.5); color: #fff; border-radius: 12px;
+      cursor: pointer; transition: background 0.15s;
+    }
+    .qc-btn:hover { background: rgba(255,255,255,0.15); }
+    .qc-btn:active { background: rgba(255,255,255,0.25); }
+    .qc-btn.cooldown { opacity: 0.3; pointer-events: none; }
+    #chat-bubble {
+      position: absolute; top: 60px; left: 50%; transform: translateX(-50%);
+      background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 16px; padding: 6px 16px; font-size: 16px; color: #fff;
+      pointer-events: none; opacity: 0; transition: opacity 0.2s; z-index: 20;
+    }
+    #chat-bubble.visible { opacity: 1; }
+
     /* Watch Ad button */
     #btn-watch-ad { border-color: #ffd700; color: #ffd700; }
     #btn-watch-ad:hover { background: #ffd700; color: #000; }
@@ -100,6 +150,12 @@
       .screen button { font-size: 14px; padding: 10px 24px; min-width: 160px; }
       #screen-hud #hud-score { font-size: 24px; }
       .hud-badge { font-size: 12px; padding: 3px 6px; }
+      #screen-shop { padding: 16px 10px; overflow-x: hidden; }
+      #shop-items, #shop-tabs, #shop-tab-content { max-width: 100%; width: 100%; }
+      .shop-tab { font-size: 12px; padding: 8px 2px; }
+      .cosmetic-grid { grid-template-columns: repeat(3, 1fr); }
+      .shop-btn { padding: 6px 10px !important; min-width: 70px !important; font-size: 12px !important; }
+      #shop-coins { font-size: 18px; }
     }
 
     /* Responsive: short screens (landscape phones) */
@@ -117,25 +173,36 @@
     <!-- MENU -->
     <div id="screen-menu" class="screen">
       <h1 data-i18n="menu.title">PONG</h1>
+      <div id="menu-online-count" style="color: rgba(255,255,255,0.4); font-size: 14px; margin-bottom: 20px;"></div>
       <button id="btn-play" data-i18n="menu.play">PLAY</button>
       <button id="btn-online" data-i18n="menu.online">ONLINE</button>
       <button id="btn-shop" data-i18n="menu.shop">SHOP</button>
+      <div id="menu-mmr" style="font-size: 16px; color: rgba(255,255,255,0.6); margin-top: 15px;"></div>
+      <div id="menu-coins" style="color: #ffd700; font-size: 16px; margin-top: 6px;"></div>
     </div>
 
     <!-- HUD -->
     <div id="screen-hud" class="screen">
-      <div class="hud-spacer"></div>
+      <div id="hud-stake" style="position: absolute; top: 15px; left: 20px; font-size: 14px; color: rgba(255,215,0,0.6); pointer-events: none;"></div>
       <div id="hud-score">0 : 0</div>
-      <div class="hud-right">
-        <span id="hud-coins">0</span>
+      <div id="hud-streak" style="position: absolute; top: 15px; right: 20px; font-size: 14px; color: #ff8800; pointer-events: none;"></div>
+      <div id="hud-player-info"></div>
+      <div id="hud-opponent-info"></div>
+      <div id="quick-chat-bar">
+        <button class="qc-btn" data-chat="gg">GG!</button>
+        <button class="qc-btn" data-chat="nice">Nice!</button>
+        <button class="qc-btn" data-chat="wow">Wow!</button>
+        <button class="qc-btn" data-chat="glhf">GL HF</button>
       </div>
-      <div id="hud-upgrades"></div>
+      <div id="chat-bubble"></div>
     </div>
 
     <!-- GAME OVER -->
     <div id="screen-game-over" class="screen">
       <h2 id="gameover-title">YOU WIN!</h2>
       <div id="gameover-coins">+10 coins</div>
+      <div id="gameover-mmr" style="font-size: 16px; margin: 6px 0; display: none;"></div>
+      <div id="gameover-streak" style="font-size: 18px; color: #ff8800; margin-bottom: 10px; display: none;"></div>
       <div id="leaderboard">
         <h3 data-i18n="gameover.leaderboard">Leaderboard</h3>
         <ol id="leaderboard-list"></ol>
@@ -148,15 +215,32 @@
 
     <!-- LOBBY -->
     <div id="screen-lobby" class="screen">
+      <div id="lobby-stake" style="color: #ffd700; font-size: 20px; margin-bottom: 10px;"></div>
       <div id="lobby-status">Searching for opponent<span class="dots"></span></div>
+      <div id="lobby-timer" style="color: rgba(255,255,255,0.5); font-size: 16px; margin: 8px 0;"></div>
+      <div id="lobby-tip" style="color: rgba(255,255,255,0.3); font-size: 14px; margin: 15px 0; max-width: 300px; text-align: center;"></div>
       <button id="btn-cancel-lobby" data-i18n="lobby.cancel">CANCEL</button>
+    </div>
+
+    <!-- VS SCREEN -->
+    <div id="screen-vs" class="screen">
+      <div id="vs-player" style="font-size: 28px; font-weight: bold;"></div>
+      <div id="vs-player-mmr" style="font-size: 14px; color: rgba(255,255,255,0.5); margin-top: 4px;"></div>
+      <div style="font-size: 48px; font-weight: bold; margin: 20px 0; color: #ff4444;">VS</div>
+      <div id="vs-opponent" style="font-size: 28px; font-weight: bold;"></div>
+      <div id="vs-opponent-mmr" style="font-size: 14px; color: rgba(255,255,255,0.5); margin-top: 4px;"></div>
+      <div id="vs-stake" style="color: #ffd700; font-size: 18px; margin-top: 20px;"></div>
     </div>
 
     <!-- SHOP -->
     <div id="screen-shop" class="screen">
       <h2 data-i18n="shop.title">SHOP</h2>
       <div id="shop-coins">Coins: 0</div>
-      <div id="shop-items"></div>
+      <div id="shop-tabs">
+        <button class="shop-tab active" data-tab="gameplay" data-i18n="shop.tab.gameplay">Gameplay</button>
+        <button class="shop-tab" data-tab="cosmetics" data-i18n="shop.tab.cosmetics">Cosmetics</button>
+      </div>
+      <div id="shop-tab-content"></div>
       <button id="btn-shop-back" data-i18n="shop.back" style="margin-top:20px">BACK</button>
     </div>
 

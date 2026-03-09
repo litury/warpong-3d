@@ -8,12 +8,12 @@ export function markDirty() {
   dirty = true;
 }
 
-export function flushSaveIfNeeded(wallet: Wallet, owned: OwnedUpgrades, equipped: EquippedCosmetics) {
+export function flushSaveIfNeeded(wallet: Wallet, owned: OwnedUpgrades, equipped: EquippedCosmetics, totalOnlineWins: number, winStreak: number) {
   if (!dirty) return;
   const now = Date.now();
   if (now - lastSaveTime < SAVE_DEBOUNCE_MS) return;
 
-  const data: ShopSaveData = { wallet, owned, equipped };
+  const data: ShopSaveData = { wallet, owned, equipped, totalOnlineWins, winStreak };
   try {
     window.ysdk_save_data(JSON.stringify(data));
   } catch {
@@ -33,7 +33,13 @@ export function parseLoadOkData(dataStr: string): ShopSaveData | null {
   try {
     const parsed = JSON.parse(dataStr);
     if (parsed && parsed.wallet) {
-      return parsed as ShopSaveData;
+      return {
+        wallet: parsed.wallet,
+        owned: parsed.owned,
+        equipped: parsed.equipped,
+        totalOnlineWins: parsed.totalOnlineWins ?? 0,
+        winStreak: parsed.winStreak ?? 0,
+      };
     }
   } catch {
     console.warn("[save] parse error");

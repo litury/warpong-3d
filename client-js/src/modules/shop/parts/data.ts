@@ -53,6 +53,8 @@ export interface ShopSaveData {
   wallet: Wallet;
   owned: OwnedUpgrades;
   equipped: EquippedCosmetics;
+  totalOnlineWins: number;
+  winStreak: number;
 }
 
 export function getLevel(owned: OwnedUpgrades, id: UpgradeId): number {
@@ -60,7 +62,7 @@ export function getLevel(owned: OwnedUpgrades, id: UpgradeId): number {
 }
 
 export function createDefaultWallet(): Wallet {
-  return { coins: 0 };
+  return { coins: 100 };
 }
 
 export function createDefaultOwned(): OwnedUpgrades {

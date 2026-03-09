@@ -7,10 +7,14 @@ const en: Record<string, string> = {
   "menu.online": "ONLINE",
   "menu.shop": "SHOP",
 
+  "menu.onlineCount": "Online: {count}",
+
   // HUD
   "hud.badge.spd": "SPD",
   "hud.badge.size": "SIZE",
   "hud.badge.ball": "BALL",
+  "hud.stake": "Stake: {amount}",
+  "hud.streak": "Streak: {count}",
 
   // Game Over
   "gameover.win": "YOU WIN!",
@@ -21,11 +25,23 @@ const en: Record<string, string> = {
   "gameover.watchAd": "WATCH AD +15",
   "gameover.menu": "MENU",
   "gameover.leaderboard": "Leaderboard",
+  "gameover.coinsLabel": "coins",
+  "gameover.total": "total",
+  "gameover.streak": "Win streak: {count}!",
+
+  // VS
+  "vs.you": "YOU",
+  "vs.stake": "Stake: {amount} coins",
+
+  // Online
+  "online.insufficientFunds": "Not enough coins! You need 10 coins to play online.",
 
   // Lobby
   "lobby.connecting": "Connecting...",
   "lobby.searching": "Searching for opponent...",
   "lobby.cancel": "CANCEL",
+  "lobby.stake": "Stake: {amount} coins",
+  "lobby.timer": "Search: {time}",
 
   // Shop
   "shop.title": "SHOP",
@@ -40,6 +56,10 @@ const en: Record<string, string> = {
   "shop.cat.PaddleColor": "Paddle Colors",
   "shop.cat.BallTrail": "Ball Trails",
   "shop.cat.BallVisual": "Ball Visual",
+
+  // Shop tabs
+  "shop.tab.gameplay": "Gameplay",
+  "shop.tab.cosmetics": "Cosmetics",
 
   // Shop items
   "shop.item.PaddleSpeed.name": "Swift Paddle",
@@ -76,10 +96,14 @@ const ru: Record<string, string> = {
   "menu.online": "ОНЛАЙН",
   "menu.shop": "МАГАЗИН",
 
+  "menu.onlineCount": "Онлайн: {count}",
+
   // HUD
   "hud.badge.spd": "СКР",
   "hud.badge.size": "РАЗМ",
   "hud.badge.ball": "МЯЧ",
+  "hud.stake": "Ставка: {amount}",
+  "hud.streak": "Серия: {count}",
 
   // Конец игры
   "gameover.win": "ПОБЕДА!",
@@ -90,11 +114,23 @@ const ru: Record<string, string> = {
   "gameover.watchAd": "РЕКЛАМА +15",
   "gameover.menu": "МЕНЮ",
   "gameover.leaderboard": "Рейтинг",
+  "gameover.coinsLabel": "монет",
+  "gameover.total": "всего",
+  "gameover.streak": "Серия побед: {count}!",
+
+  // VS
+  "vs.you": "ВЫ",
+  "vs.stake": "Ставка: {amount} монет",
+
+  // Онлайн
+  "online.insufficientFunds": "Недостаточно монет! Нужно 10 монет для онлайн-игры.",
 
   // Лобби
   "lobby.connecting": "Подключение...",
   "lobby.searching": "Поиск соперника...",
   "lobby.cancel": "ОТМЕНА",
+  "lobby.stake": "Ставка: {amount} монет",
+  "lobby.timer": "Поиск: {time}",
 
   // Магазин
   "shop.title": "МАГАЗИН",
@@ -109,6 +145,10 @@ const ru: Record<string, string> = {
   "shop.cat.PaddleColor": "Цвета ракетки",
   "shop.cat.BallTrail": "Следы мяча",
   "shop.cat.BallVisual": "Визуал мяча",
+
+  // Табы магазина
+  "shop.tab.gameplay": "Геймплей",
+  "shop.tab.cosmetics": "Косметика",
 
   // Товары магазина
   "shop.item.PaddleSpeed.name": "Быстрая ракетка",

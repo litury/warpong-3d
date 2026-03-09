@@ -1,4 +1,4 @@
-import type { ClientMessage, ServerMessage, PlayerCosmetics, PlayerUpgrades } from "../../shared/messages";
+import type { ClientMessage, ServerMessage } from "../../shared/messages";
 
 const SERVER_URL = "ws://localhost:3030";
 
@@ -6,21 +6,22 @@ export class WsClient {
   private ws: WebSocket | null = null;
   private _inbox: ServerMessage[] = [];
   private _connected = false;
-  private _pendingCosmetics: PlayerCosmetics | null = null;
-  private _pendingUpgrades: PlayerUpgrades | null = null;
+  private _pendingJoin = false;
 
-  connect(cosmetics: PlayerCosmetics, upgrades: PlayerUpgrades) {
+  connectPassive() {
     if (this.ws) return;
-    this._pendingCosmetics = cosmetics;
-    this._pendingUpgrades = upgrades;
-    this.ws = new WebSocket(SERVER_URL);
+    const ws = new WebSocket(SERVER_URL);
+    this.ws = ws;
 
-    this.ws.onopen = () => {
+    ws.onopen = () => {
       this._connected = true;
-      this.send({ type: "JoinQueue", cosmetics: this._pendingCosmetics!, upgrades: this._pendingUpgrades! });
+      if (this._pendingJoin) {
+        this.send({ type: "JoinQueue" });
+        this._pendingJoin = false;
+      }
     };
 
-    this.ws.onmessage = (event) => {
+    ws.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data as string) as ServerMessage;
         this._inbox.push(msg);
@@ -29,14 +30,25 @@ export class WsClient {
       }
     };
 
-    this.ws.onclose = () => {
-      this._connected = false;
-      this.ws = null;
+    ws.onclose = () => {
+      if (this.ws === ws) {
+        this._connected = false;
+        this.ws = null;
+      }
     };
 
-    this.ws.onerror = (e) => {
+    ws.onerror = (e) => {
       console.error("[ws] error:", e);
     };
+  }
+
+  joinQueue() {
+    if (this._connected) {
+      this.send({ type: "JoinQueue" });
+    } else {
+      this._pendingJoin = true;
+      this.connectPassive();
+    }
   }
 
   send(msg: ClientMessage) {
@@ -53,6 +65,7 @@ export class WsClient {
 
   close() {
     if (this.ws) {
+      this.ws.onclose = null;
       this.ws.close();
       this.ws = null;
     }
