@@ -33,6 +33,7 @@ export interface PlayerInfo {
   name: string;
   id: string;
   isAuthorized: boolean;
+  signature: string;
 }
 
 export class YandexSdk {
@@ -103,6 +104,7 @@ export class YandexSdk {
             name: msg.name as string,
             id: msg.id as string,
             isAuthorized: msg.isAuthorized as boolean,
+            signature: msg.signature as string,
           };
           callbacks.onPlayerInfo?.(this.player);
           window.ysdk_load_data();

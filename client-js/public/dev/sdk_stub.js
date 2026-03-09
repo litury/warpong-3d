@@ -58,7 +58,8 @@ window.YaGames = {
                 return Promise.resolve({
                     getName: function() { return "DevPlayer"; },
                     getUniqueID: function() { return "dev-123"; },
-                    getMode: function() { return "full"; },
+                    isAuthorized: function() { return true; },
+                    signature: "stub-signature-dev",
                     setData: function(data, flush) {
                         console.log("[stub] setData", data, flush);
                         localStorage.setItem("__ysdk_save", JSON.stringify(data));
