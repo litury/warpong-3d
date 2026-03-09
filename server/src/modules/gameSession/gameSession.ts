@@ -2,7 +2,7 @@ import type { ServerWebSocket } from "bun";
 import { TICK_INTERVAL_MS } from "../../config";
 import type { ServerMessage, PaddleDirection, PlayerSide, PlayerCosmetics, PlayerUpgrades, QuickChatId } from "../../shared";
 import { createInitialState, tick, type SimulationState } from "./parts";
-import { getPlayer, addCoins, updateMmr, updateStreak } from "../db";
+import { settleGame } from "../db";
 
 export interface PlayerConnection {
   ws: ServerWebSocket<PlayerData>;
@@ -113,27 +113,16 @@ export class GameSession {
     const loserId = loserWs.data.playerId;
 
     const elo = calcElo(winnerWs.data.mmr, loserWs.data.mmr);
-    updateMmr(winnerId, elo.winnerNew);
-    updateMmr(loserId, elo.loserNew);
 
-    const winnerNewCoins = addCoins(winnerId, winReward);
-    const loserNewCoins = addCoins(loserId, -STAKE);
-
-    const winnerRecord = getPlayer(winnerId);
-    if (winnerRecord) {
-      updateStreak(winnerId, winnerRecord.winStreak + 1, winnerRecord.totalOnlineWins + 1);
-    }
-    const loserRecord = getPlayer(loserId);
-    if (loserRecord) {
-      updateStreak(loserId, 0, loserRecord.totalOnlineWins);
-    }
+    // Persist to DB (atomic transaction)
+    const settled = settleGame(winnerId, loserId, elo.winnerNew, elo.loserNew, winReward, -STAKE);
 
     winnerWs.data.mmr = elo.winnerNew;
     loserWs.data.mmr = elo.loserNew;
-    winnerWs.data.coins = winnerNewCoins;
-    loserWs.data.coins = loserNewCoins;
+    winnerWs.data.coins = settled.winnerCoins;
+    loserWs.data.coins = settled.loserCoins;
 
-    return { winReward, elo, winnerNewCoins, loserNewCoins };
+    return { winReward, elo, winnerNewCoins: settled.winnerCoins, loserNewCoins: settled.loserCoins };
   }
 
   private gameTick(): void {
