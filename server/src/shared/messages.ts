@@ -21,6 +21,7 @@ export type QuickChatId = "gg" | "nice" | "wow" | "glhf" | "oops" | "rematch";
 
 // Client → Server
 export type ClientMessage =
+  | { type: "Auth"; signature: string; uniqueId: string; name: string }
   | { type: "JoinQueue" }
   | { type: "LeaveQueue" }
   | { type: "PlayerInput"; direction: PaddleDirection }
@@ -42,7 +43,8 @@ export type ServerMessage =
   | { type: "GameOver"; winner: PlayerSide; reward: number; mmr: number; mmrChange: number; coins: number }
   | { type: "OpponentDisconnected"; reward: number; coins: number }
   | { type: "OnlineCount"; count: number }
-  | { type: "OpponentChat"; chatId: QuickChatId };
+  | { type: "OpponentChat"; chatId: QuickChatId }
+  | { type: "Error"; message: string };
 
 export interface BallState {
   x: number;

@@ -4,8 +4,6 @@ import { getLeaderboard } from "../modules/db";
 
 const CORS_HEADERS = { "Access-Control-Allow-Origin": "*", "Content-Type": "application/json" };
 
-let nextPlayerId = 1;
-
 export function handleFetch(
   req: Request,
   server: Server,
@@ -23,9 +21,8 @@ export function handleFetch(
     return Response.json(lb, { headers: CORS_HEADERS });
   }
 
-  const id = nextPlayerId;
-  if (server.upgrade(req, { data: { sessionId: null, playerId: `p${id}`, playerName: `Player_${id}`, cosmetics: null, upgrades: null, coins: 0, mmr: 1000 } })) {
-    nextPlayerId++;
+  const tempId = crypto.randomUUID();
+  if (server.upgrade(req, { data: { sessionId: null, playerId: tempId, playerName: "", authenticated: false, cosmetics: null, upgrades: null, coins: 0, mmr: 1000 } })) {
     return;
   }
 
