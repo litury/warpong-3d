@@ -1,9 +1,0 @@
-[workspace]
-members = ["shared", "client"]
-resolver = "3"
-
-[profile.wasm-release]
-inherits = "release"
-opt-level = "s"
-lto = "thin"
-strip = "debuginfo"
