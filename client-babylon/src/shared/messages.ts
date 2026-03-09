@@ -23,7 +23,8 @@ export type ClientMessage =
   | { type: "QuickChat"; chatId: QuickChatId }
   | { type: "BuyUpgrade"; upgradeId: string }
   | { type: "EquipCosmetic"; slot: "paddleColor" | "ballTrail"; itemId: string | null }
-  | { type: "RewardCoins"; amount: number };
+  | { type: "RewardCoins"; amount: number }
+  | { type: "PurchaseCoins"; productId: string };
 
 // Server -> Client
 export type ServerMessage =

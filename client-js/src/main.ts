@@ -159,13 +159,9 @@ async function main() {
         }
       },
       onPurchaseOk: (productId, token) => {
-        const amounts: Record<string, number> = { coins_100: 100, coins_500: 500, coins_1500: 1500 };
-        const amount = amounts[productId] ?? 0;
-        if (amount > 0) {
-          ws.send({ type: "RewardCoins", amount });
-        }
+        ws.send({ type: "PurchaseCoins", productId });
         window.ysdk_consume_purchase(token);
-        console.log("[iap] purchased", productId, "+", amount, "coins");
+        console.log("[iap] purchased", productId);
       },
     });
 

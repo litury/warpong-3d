@@ -9,6 +9,18 @@ import type { PlayerRecord } from "./modules/db";
 const matchmaking = new Matchmaking();
 const connectedSockets = new Set<ServerWebSocket<PlayerData>>();
 
+// Anti-fraud: track last reward timestamp per player (30s cooldown)
+const REWARD_COOLDOWN_MS = 30_000;
+const REWARD_MAX_AMOUNT = 15;
+const lastRewardTime = new Map<string, number>();
+
+// IAP product catalog (server-authoritative)
+const IAP_PRODUCTS: Record<string, number> = {
+  coins_100: 100,
+  coins_500: 500,
+  coins_1500: 1500,
+};
+
 let nextPlayerId = 1;
 
 function broadcastOnlineCount() {
@@ -181,14 +193,36 @@ Bun.serve<PlayerData>({
         }
 
         case "RewardCoins": {
-          // Rewarded ad coins — cap at reasonable amount
-          const amount = Math.min(Math.max(0, msg.amount), 50);
+          // Rewarded ad coins — enforce cooldown & cap
+          const now = Date.now();
+          const lastTime = lastRewardTime.get(ws.data.playerId) ?? 0;
+          if (now - lastTime < REWARD_COOLDOWN_MS) {
+            console.log(`[anti-fraud] RewardCoins cooldown for ${ws.data.playerId}, ${Math.ceil((REWARD_COOLDOWN_MS - (now - lastTime)) / 1000)}s remaining`);
+            break;
+          }
+          const amount = Math.min(Math.max(0, msg.amount), REWARD_MAX_AMOUNT);
           if (amount > 0) {
+            lastRewardTime.set(ws.data.playerId, now);
             const newCoins = addCoins(ws.data.playerId, amount);
             ws.data.coins = newCoins;
             const updated = getPlayer(ws.data.playerId)!;
             sendPlayerSync(ws, updated);
           }
+          break;
+        }
+
+        case "PurchaseCoins": {
+          // IAP coins — validate productId against server catalog
+          const iapAmount = IAP_PRODUCTS[msg.productId];
+          if (!iapAmount) {
+            console.log(`[anti-fraud] Unknown productId: ${msg.productId} from ${ws.data.playerId}`);
+            break;
+          }
+          const newCoins = addCoins(ws.data.playerId, iapAmount);
+          ws.data.coins = newCoins;
+          const updated = getPlayer(ws.data.playerId)!;
+          sendPlayerSync(ws, updated);
+          console.log(`[iap] ${ws.data.playerId} purchased ${msg.productId} +${iapAmount} coins`);
           break;
         }
       }
@@ -197,6 +231,7 @@ Bun.serve<PlayerData>({
     close(ws) {
       console.log(`Player disconnected: ${ws.data.playerId}`);
       connectedSockets.delete(ws);
+      lastRewardTime.delete(ws.data.playerId);
       matchmaking.handleDisconnect(ws);
       broadcastOnlineCount();
     },
