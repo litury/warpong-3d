@@ -14,11 +14,80 @@ const BALL_KILL_RADIUS = 25;
 const MAX_ZOMBIES = 40;
 const MAX_POOL = 15;
 const FIGHT_RADIUS = 20;
+const FIGHT_RADIUS_SQ = FIGHT_RADIUS * FIGHT_RADIUS;
 const FIGHT_DURATION = 2;
 const BODY_LINGER = 5;
 const MAX_DECALS = 50;
 const DECAL_SIZE = 18;
 const SCREAM_DURATION = 0.5;
+
+const GRID_CELL = FIGHT_RADIUS; // cell size = fight radius so neighbours cover full range
+
+class SpatialGrid {
+  private cellInv: number;
+  private cells = new Map<number, Zombie[]>();
+
+  constructor(cellSize: number) {
+    this.cellInv = 1 / cellSize;
+  }
+
+  clear() {
+    this.cells.clear();
+  }
+
+  insert(z: Zombie) {
+    const key = this.key(z.x, z.z);
+    const bucket = this.cells.get(key);
+    if (bucket) {
+      bucket.push(z);
+    } else {
+      this.cells.set(key, [z]);
+    }
+  }
+
+  /** Iterate all pairs of (left, right) zombies in same or adjacent cells */
+  forEachFightPair(callback: (l: Zombie, r: Zombie) => boolean) {
+    for (const [key, bucket] of this.cells) {
+      // Check within the same cell
+      this.checkBucket(bucket, callback);
+      // Check 4 neighbours (right, below, below-left, below-right) to avoid duplicates
+      const cx = key & 0xFFFF;
+      const cz = (key >> 16) & 0xFFFF;
+      for (const [dx, dz] of [[1, 0], [0, 1], [1, 1], [-1, 1]] as const) {
+        const nk = ((cz + dz) & 0xFFFF) << 16 | ((cx + dx) & 0xFFFF);
+        const neighbour = this.cells.get(nk);
+        if (neighbour) this.checkCross(bucket, neighbour, callback);
+      }
+    }
+  }
+
+  private checkBucket(bucket: Zombie[], cb: (l: Zombie, r: Zombie) => boolean) {
+    for (let i = 0; i < bucket.length; i++) {
+      for (let j = i + 1; j < bucket.length; j++) {
+        const a = bucket[i], b = bucket[j];
+        if (a.side === b.side) continue;
+        const [l, r] = a.side === "left" ? [a, b] : [b, a];
+        if (cb(l, r)) return;
+      }
+    }
+  }
+
+  private checkCross(a: Zombie[], b: Zombie[], cb: (l: Zombie, r: Zombie) => boolean) {
+    for (const za of a) {
+      for (const zb of b) {
+        if (za.side === zb.side) continue;
+        const [l, r] = za.side === "left" ? [za, zb] : [zb, za];
+        if (cb(l, r)) return;
+      }
+    }
+  }
+
+  private key(x: number, z: number): number {
+    const cx = ((x * this.cellInv) | 0) & 0xFFFF;
+    const cz = ((z * this.cellInv) | 0) & 0xFFFF;
+    return (cz << 16) | cx;
+  }
+}
 
 export type ZombieSide = "left" | "right";
 type ZombieState = "spawning" | "walking" | "fighting" | "dying";
@@ -47,6 +116,7 @@ export class ZombieManager {
   private pool: ZombieInstance[] = [];
   private decals: Mesh[] = [];
   private decalMat: StandardMaterial | null = null;
+  private fightGrid = new SpatialGrid(GRID_CELL);
 
   onZombieReachedMech?: (side: ZombieSide) => void;
   onZombieKilled?: () => void;
@@ -152,37 +222,37 @@ export class ZombieManager {
   }
 
   private checkFights() {
-    const walking = this.zombies.filter(z => z.state === "walking");
-    const left = walking.filter(z => z.side === "left");
-    const right = walking.filter(z => z.side === "right");
+    const grid = this.fightGrid;
+    grid.clear();
 
-    for (const l of left) {
-      for (const r of right) {
-        if (r.state !== "walking") continue;
-        const dx = l.x - r.x;
-        const dz = l.z - r.z;
-        const dist = Math.sqrt(dx * dx + dz * dz);
-        if (dist < FIGHT_RADIUS) {
-          l.state = "fighting";
-          r.state = "fighting";
-          l.fightTimer = 0;
-          r.fightTimer = 0;
-          l.fightPartner = r;
-          r.fightPartner = l;
-          // Face each other
-          l.instance.root.rotation.y = Math.PI;
-          r.instance.root.rotation.y = 0;
-          // Play attack animations
-          stopAllAnims(l.instance);
-          stopAllAnims(r.instance);
-          const lAnim = l.useAltAttack ? l.instance.punchComboAnim : l.instance.attackAnim;
-          const rAnim = r.useAltAttack ? r.instance.punchComboAnim : r.instance.attackAnim;
-          lAnim.start(true);
-          rAnim.start(true);
-          break;
-        }
-      }
+    // Insert only walking zombies into the grid — no temporary arrays
+    for (const z of this.zombies) {
+      if (z.state === "walking") grid.insert(z);
     }
+
+    // Check only same/adjacent cells — O(n) average instead of O(n²)
+    grid.forEachFightPair((l, r) => {
+      if (l.state !== "walking" || r.state !== "walking") return false;
+      const dx = l.x - r.x;
+      const dz = l.z - r.z;
+      if (dx * dx + dz * dz < FIGHT_RADIUS_SQ) {
+        l.state = "fighting";
+        r.state = "fighting";
+        l.fightTimer = 0;
+        r.fightTimer = 0;
+        l.fightPartner = r;
+        r.fightPartner = l;
+        l.instance.root.rotation.y = Math.PI;
+        r.instance.root.rotation.y = 0;
+        stopAllAnims(l.instance);
+        stopAllAnims(r.instance);
+        const lAnim = l.useAltAttack ? l.instance.punchComboAnim : l.instance.attackAnim;
+        const rAnim = r.useAltAttack ? r.instance.punchComboAnim : r.instance.attackAnim;
+        lAnim.start(true);
+        rAnim.start(true);
+      }
+      return false;
+    });
   }
 
   private startDying(z: Zombie) {
