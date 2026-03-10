@@ -1,8 +1,6 @@
 import { Scene } from "@babylonjs/core/scene";
-import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
-import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
-import { Texture } from "@babylonjs/core/Materials/Textures/texture";
-import { Mesh } from "@babylonjs/core/Meshes/mesh";
+import { SpriteManager } from "@babylonjs/core/Sprites/spriteManager";
+import { Sprite } from "@babylonjs/core/Sprites/sprite";
 import { ARENA_WIDTH, ARENA_HEIGHT, PADDLE_MARGIN, WALL_INSET } from "../config/gameConfig";
 import { spawnZombie, scaleZombieToHeight, hideZombie, showZombie, disposeZombie, stopAllAnims } from "./ZombieLoader";
 import type { ZombieInstance } from "./ZombieLoader";
@@ -45,8 +43,8 @@ export class ZombieManager {
   private waveNumber = 0;
   private scene: Scene;
   private pool: ZombieInstance[] = [];
-  private decals: Mesh[] = [];
-  private decalMat: StandardMaterial | null = null;
+  private decalSprites: Sprite[] = [];
+  private decalManager: SpriteManager | null = null;
 
   onZombieReachedMech?: (side: ZombieSide) => void;
   onZombieKilled?: () => void;
@@ -200,28 +198,29 @@ export class ZombieManager {
   }
 
   private spawnDecal(x: number, z: number) {
-    if (!this.decalMat) {
-      this.decalMat = new StandardMaterial("bloodMat", this.scene);
-      this.decalMat.diffuseTexture = new Texture("/assets/blood_decal.png", this.scene);
-      this.decalMat.diffuseTexture.hasAlpha = true;
-      this.decalMat.useAlphaFromDiffuseTexture = true;
-      this.decalMat.disableLighting = true;
-      this.decalMat.emissiveTexture = this.decalMat.diffuseTexture;
-      this.decalMat.backFaceCulling = false;
-      this.decalMat.freeze();
+    if (!this.decalManager) {
+      this.decalManager = new SpriteManager(
+        "bloodDecals",
+        "/assets/blood_decal.png",
+        MAX_DECALS,
+        DECAL_SIZE,
+        this.scene,
+      );
+      this.decalManager.renderingGroupId = 0;
+      this.decalManager.isPickable = false;
     }
 
-    if (this.decals.length >= MAX_DECALS) {
-      const old = this.decals.shift()!;
+    if (this.decalSprites.length >= MAX_DECALS) {
+      const old = this.decalSprites.shift()!;
       old.dispose();
     }
 
-    const decal = MeshBuilder.CreateGround("blood", { width: DECAL_SIZE, height: DECAL_SIZE }, this.scene);
-    decal.position.set(x, 0.05, z);
-    decal.rotation.y = Math.random() * Math.PI * 2;
-    decal.material = this.decalMat;
-    decal.freezeWorldMatrix();
-    this.decals.push(decal);
+    const sprite = new Sprite("blood", this.decalManager);
+    sprite.position.set(x, 0.05, z);
+    sprite.angle = Math.random() * Math.PI * 2;
+    sprite.width = DECAL_SIZE;
+    sprite.height = DECAL_SIZE;
+    this.decalSprites.push(sprite);
   }
 
   private async spawnWave() {
@@ -317,8 +316,11 @@ export class ZombieManager {
     }
     this.zombies = [];
     this.pool = [];
-    for (const d of this.decals) d.dispose();
-    this.decals = [];
+    if (this.decalManager) {
+      this.decalManager.dispose();
+      this.decalManager = null;
+    }
+    this.decalSprites = [];
   }
 
   restart() {
