@@ -12,6 +12,8 @@ export function processServerMessages(
     onOpponentDisconnected?: () => void;
     onScoreUpdate?: (left: number, right: number) => void;
     onOnlineCount?: (count: number) => void;
+    onGamePaused?: (secondsLeft: number) => void;
+    onGameResumed?: () => void;
   },
 ) {
   for (const msg of ws.drainInbox()) {
@@ -41,6 +43,14 @@ export function processServerMessages(
       case "OpponentDisconnected":
         logic.gameOver = true;
         callbacks.onOpponentDisconnected?.();
+        break;
+
+      case "GamePaused":
+        callbacks.onGamePaused?.(msg.secondsLeft);
+        break;
+
+      case "GameResumed":
+        callbacks.onGameResumed?.();
         break;
 
       case "OnlineCount":

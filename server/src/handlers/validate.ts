@@ -10,6 +10,7 @@ const VALID_TYPES = new Set([
   "EquipCosmetic",
   "RewardCoins",
   "PurchaseCoins",
+  "Reconnect",
 ]);
 
 const VALID_DIRECTIONS = new Set<PaddleDirection>(["Up", "Down", "Idle"]);
@@ -62,6 +63,10 @@ export function validateMessage(raw: unknown): ClientMessage | null {
     case "PurchaseCoins":
       if (typeof obj.productId !== "string" || obj.productId === "") return null;
       return { type: "PurchaseCoins", productId: obj.productId };
+
+    case "Reconnect":
+      if (typeof obj.sessionToken !== "string" || obj.sessionToken === "") return null;
+      return { type: "Reconnect", sessionToken: obj.sessionToken };
 
     default:
       return null;

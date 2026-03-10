@@ -25,13 +25,14 @@ export type ClientMessage =
   | { type: "BuyUpgrade"; upgradeId: string }
   | { type: "EquipCosmetic"; slot: "paddleColor" | "ballTrail"; itemId: string | null }
   | { type: "RewardCoins"; amount: number }
-  | { type: "PurchaseCoins"; productId: string };
+  | { type: "PurchaseCoins"; productId: string }
+  | { type: "Reconnect"; sessionToken: string };
 
 // Server -> Client
 export type ServerMessage =
   | { type: "PlayerSync"; coins: number; mmr: number; upgrades: Record<string, number>; paddleColor: string | null; ballTrail: string | null; totalOnlineWins: number; winStreak: number }
   | { type: "QueueJoined" }
-  | { type: "MatchFound"; side: PlayerSide; opponentCosmetics: PlayerCosmetics; opponentUpgrades: PlayerUpgrades; opponentName: string; stake: number; mmr: number; opponentMmr: number }
+  | { type: "MatchFound"; side: PlayerSide; opponentCosmetics: PlayerCosmetics; opponentUpgrades: PlayerUpgrades; opponentName: string; stake: number; mmr: number; opponentMmr: number; sessionToken: string }
   | {
       type: "GameStateUpdate";
       ball: BallState;
@@ -42,6 +43,8 @@ export type ServerMessage =
   | { type: "GameEvent"; event: GameEvent }
   | { type: "GameOver"; winner: PlayerSide; reward: number; mmr: number; mmrChange: number; coins: number }
   | { type: "OpponentDisconnected"; reward: number; coins: number }
+  | { type: "GamePaused"; reason: "opponent_disconnected"; secondsLeft: number }
+  | { type: "GameResumed" }
   | { type: "OnlineCount"; count: number }
   | { type: "OpponentChat"; chatId: QuickChatId };
 

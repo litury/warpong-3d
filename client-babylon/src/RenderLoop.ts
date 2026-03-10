@@ -43,6 +43,8 @@ export function startRenderLoop(
         },
         onOpponentDisconnected: () => ui.showGameOver("OPPONENT LEFT"),
         onScoreUpdate: () => ui.updateScore(logic),
+        onGamePaused: (secondsLeft) => ui.showPaused(secondsLeft),
+        onGameResumed: () => ui.hidePaused(),
       });
 
       if (state.playing && !logic.gameOver) {
