@@ -9,6 +9,8 @@ export {
   updateCosmetics,
   getLeaderboard,
   settleGame,
+  reserveStake,
+  releaseStake,
   type PlayerRecord,
   type SettleGameResult,
 } from "./db";

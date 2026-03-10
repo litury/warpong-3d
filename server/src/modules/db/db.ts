@@ -151,6 +151,25 @@ export function updateCosmetics(id: string, paddleColor: string | null, ballTrai
   stmtUpdateCosmetics.run(paddleColor, ballTrail, id);
 }
 
+/**
+ * Atomically deduct STAKE coins. Returns updated coins or null if insufficient.
+ */
+export function reserveStake(id: string, stake: number): number | null {
+  const row = stmtGet.get(id);
+  if (!row || row.coins < stake) return null;
+  stmtUpdateCoins.run(-stake, id);
+  return row.coins - stake;
+}
+
+/**
+ * Refund previously reserved stake (e.g. player left queue before match).
+ */
+export function releaseStake(id: string, stake: number): number {
+  stmtUpdateCoins.run(stake, id);
+  const row = stmtGet.get(id)!;
+  return row.coins;
+}
+
 export function getLeaderboard(limit = 10): PlayerRecord[] {
   const rows = stmtLeaderboard.all(limit);
   return rows.map(rowToRecord);
