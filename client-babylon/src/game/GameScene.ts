@@ -63,7 +63,7 @@ export async function createGameScene(engine: Engine): Promise<{ scene: Scene; o
     height: ARENA_HEIGHT,
   }, scene);
   const floorMat = new StandardMaterial("floorMat", scene);
-  floorMat.diffuseTexture = new Texture("/assets/arena_bg.png", scene);
+  floorMat.diffuseTexture = new Texture("/assets/arena_bg.ktx2", scene);
   floorMat.specularColor = new Color3(0.1, 0.1, 0.1);
   floor.material = floorMat;
   floor.freezeWorldMatrix();
@@ -137,8 +137,8 @@ function loadStadiumEnvironment(scene: Scene): (left: number, right: number) => 
 
   // --- Arena wall billboards (sprites on Planes, no deformation) ---
   const WALL_H = 40;
-  // wall_side.png is 1536×1024 (3:2) → width = WALL_H * 1.5
-  const SIDE_W = WALL_H * (1536 / 1024);
+  // wall_side.ktx2 is 768×512 (3:2) → width = WALL_H * 1.5
+  const SIDE_W = WALL_H * (768 / 512);
   const makeWallMat = (texPath: string) => {
     const mat = new StandardMaterial(`wallMat_${texPath}`, scene);
     const tex = new Texture(texPath, scene, false, true, Texture.BILINEAR_SAMPLINGMODE);
@@ -150,7 +150,7 @@ function loadStadiumEnvironment(scene: Scene): (left: number, right: number) => 
     return mat;
   };
 
-  const sideWallMat = makeWallMat("/assets/wall_side.png");
+  const sideWallMat = makeWallMat("/assets/wall_side.ktx2");
 
   // Side walls (±Z) only — no walls at ±X (behind player/opponent)
   const sideSegments = Math.ceil(ARENA_WIDTH / SIDE_W);

@@ -1,4 +1,5 @@
 import { Engine } from "@babylonjs/core/Engines/engine";
+import "@babylonjs/core/Misc/khronosTextureContainer2";
 import { createGameScene } from "./game/GameScene";
 import { GameLogic } from "./game/GameLogic";
 import { InputManager } from "./game/InputManager";
