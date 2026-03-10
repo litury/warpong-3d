@@ -1,20 +1,24 @@
-import { Scene } from "@babylonjs/core/scene";
-import { Engine } from "@babylonjs/core/Engines/engine";
 import { ArcRotateCamera } from "@babylonjs/core/Cameras/arcRotateCamera";
 import { Camera } from "@babylonjs/core/Cameras/camera";
-import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
+import type { Engine } from "@babylonjs/core/Engines/engine";
 import { DirectionalLight } from "@babylonjs/core/Lights/directionalLight";
+import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
 import { PointLight } from "@babylonjs/core/Lights/pointLight";
-import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
+import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
+import { Texture } from "@babylonjs/core/Materials/Textures/texture";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { Color3, Color4 } from "@babylonjs/core/Maths/math.color";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
-import { Texture } from "@babylonjs/core/Materials/Textures/texture";
-import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
-import { Mesh } from "@babylonjs/core/Meshes/mesh";
+import type { Mesh } from "@babylonjs/core/Meshes/mesh";
+import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
+import { Scene } from "@babylonjs/core/scene";
 import {
-  ARENA_WIDTH, ARENA_HEIGHT, PADDLE_WIDTH, PADDLE_HEIGHT,
-  PADDLE_MARGIN, BALL_SIZE,
+  ARENA_HEIGHT,
+  ARENA_WIDTH,
+  BALL_SIZE,
+  PADDLE_HEIGHT,
+  PADDLE_MARGIN,
+  PADDLE_WIDTH,
 } from "../config/gameConfig";
 import { loadMech, scaleMechToHeight } from "./MechLoader";
 import type { LoadedMech } from "./MechLoader";
@@ -29,7 +33,12 @@ export interface GameObjects {
   rightMech: LoadedMech;
 }
 
-export async function createGameScene(engine: Engine): Promise<{ scene: Scene; objects: GameObjects; camera: ArcRotateCamera; updateScoreboard: (left: number, right: number) => void }> {
+export async function createGameScene(engine: Engine): Promise<{
+  scene: Scene;
+  objects: GameObjects;
+  camera: ArcRotateCamera;
+  updateScoreboard: (left: number, right: number) => void;
+}> {
   const scene = new Scene(engine);
   scene.clearColor = new Color4(0.02, 0.02, 0.05, 1);
 
@@ -41,11 +50,22 @@ export async function createGameScene(engine: Engine): Promise<{ scene: Scene; o
   scene.fogEnd = 1600;
 
   // --- Camera ---
-  const camera = new ArcRotateCamera("cam", Math.PI, 1.05, 850, new Vector3(-50, 0, 0), scene);
+  const camera = new ArcRotateCamera(
+    "cam",
+    Math.PI,
+    1.05,
+    850,
+    new Vector3(-50, 0, 0),
+    scene,
+  );
   camera.inputs.clear();
 
   // --- Lighting ---
-  const keyLight = new DirectionalLight("key", new Vector3(-1, -2, 1).normalize(), scene);
+  const keyLight = new DirectionalLight(
+    "key",
+    new Vector3(-1, -2, 1).normalize(),
+    scene,
+  );
   keyLight.intensity = 0.8;
   keyLight.diffuse = new Color3(1, 0.95, 0.9);
 
@@ -58,10 +78,14 @@ export async function createGameScene(engine: Engine): Promise<{ scene: Scene; o
   rimLight.diffuse = new Color3(0.7, 0.8, 1);
 
   // --- Arena floor ---
-  const floor = MeshBuilder.CreateGround("arena", {
-    width: ARENA_WIDTH,
-    height: ARENA_HEIGHT,
-  }, scene);
+  const floor = MeshBuilder.CreateGround(
+    "arena",
+    {
+      width: ARENA_WIDTH,
+      height: ARENA_HEIGHT,
+    },
+    scene,
+  );
   const floorMat = new StandardMaterial("floorMat", scene);
   floorMat.diffuseTexture = new Texture("/assets/arena_bg.png", scene);
   floorMat.specularColor = new Color3(0.1, 0.1, 0.1);
@@ -84,16 +108,28 @@ export async function createGameScene(engine: Engine): Promise<{ scene: Scene; o
   shieldMat.alpha = 0.5;
   shieldMat.backFaceCulling = false;
 
-  const leftShield = MeshBuilder.CreateBox("leftShield", {
-    width: PADDLE_WIDTH, height: 40, depth: PADDLE_HEIGHT,
-  }, scene);
+  const leftShield = MeshBuilder.CreateBox(
+    "leftShield",
+    {
+      width: PADDLE_WIDTH,
+      height: 40,
+      depth: PADDLE_HEIGHT,
+    },
+    scene,
+  );
   leftShield.position.x = -ARENA_WIDTH / 2 + PADDLE_MARGIN + 30;
   leftShield.position.y = 20;
   leftShield.material = shieldMat;
 
-  const rightShield = MeshBuilder.CreateBox("rightShield", {
-    width: PADDLE_WIDTH, height: 40, depth: PADDLE_HEIGHT,
-  }, scene);
+  const rightShield = MeshBuilder.CreateBox(
+    "rightShield",
+    {
+      width: PADDLE_WIDTH,
+      height: 40,
+      depth: PADDLE_HEIGHT,
+    },
+    scene,
+  );
   rightShield.position.x = ARENA_WIDTH / 2 - PADDLE_MARGIN - 30;
   rightShield.position.y = 20;
   rightShield.material = shieldMat.clone("rightShieldMat");
@@ -128,7 +164,9 @@ export async function createGameScene(engine: Engine): Promise<{ scene: Scene; o
   };
 }
 
-function loadStadiumEnvironment(scene: Scene): (left: number, right: number) => void {
+function loadStadiumEnvironment(
+  scene: Scene,
+): (left: number, right: number) => void {
   // Camera is at x≈-787, looking along +X axis.
   // "Far" side = +X (behind opponent goal), "sides" = ±Z
   // Never place anything at -X (that's between camera and arena)
@@ -141,7 +179,13 @@ function loadStadiumEnvironment(scene: Scene): (left: number, right: number) => 
   const SIDE_W = WALL_H * (1536 / 1024);
   const makeWallMat = (texPath: string) => {
     const mat = new StandardMaterial(`wallMat_${texPath}`, scene);
-    const tex = new Texture(texPath, scene, false, true, Texture.BILINEAR_SAMPLINGMODE);
+    const tex = new Texture(
+      texPath,
+      scene,
+      false,
+      true,
+      Texture.BILINEAR_SAMPLINGMODE,
+    );
     tex.hasAlpha = true;
     mat.diffuseTexture = tex;
     mat.emissiveColor = new Color3(0.4, 0.4, 0.45);
@@ -158,13 +202,21 @@ function loadStadiumEnvironment(scene: Scene): (left: number, right: number) => 
   for (let i = 0; i < sideSegments; i++) {
     const px = startX + i * SIDE_W;
     // +Z side
-    const p1 = MeshBuilder.CreatePlane(`wallSide_pz_${i}`, { width: SIDE_W, height: WALL_H }, scene);
+    const p1 = MeshBuilder.CreatePlane(
+      `wallSide_pz_${i}`,
+      { width: SIDE_W, height: WALL_H },
+      scene,
+    );
     p1.material = sideWallMat;
     p1.position.set(px, WALL_H / 2, ARENA_HEIGHT / 2);
     p1.rotation.y = Math.PI;
     p1.freezeWorldMatrix();
     // -Z side
-    const p2 = MeshBuilder.CreatePlane(`wallSide_nz_${i}`, { width: SIDE_W, height: WALL_H }, scene);
+    const p2 = MeshBuilder.CreatePlane(
+      `wallSide_nz_${i}`,
+      { width: SIDE_W, height: WALL_H },
+      scene,
+    );
     p2.material = sideWallMat;
     p2.position.set(px, WALL_H / 2, -ARENA_HEIGHT / 2);
     p2.rotation.y = 0;
@@ -178,7 +230,13 @@ function loadStadiumEnvironment(scene: Scene): (left: number, right: number) => 
 
   const makeCrowdMat = (texPath: string) => {
     const mat = new StandardMaterial(`crowdMat_${texPath}`, scene);
-    const tex = new Texture(texPath, scene, false, true, Texture.BILINEAR_SAMPLINGMODE);
+    const tex = new Texture(
+      texPath,
+      scene,
+      false,
+      true,
+      Texture.BILINEAR_SAMPLINGMODE,
+    );
     tex.hasAlpha = true;
     mat.diffuseTexture = tex;
     mat.emissiveColor = new Color3(0.7, 0.7, 0.8);
@@ -189,20 +247,72 @@ function loadStadiumEnvironment(scene: Scene): (left: number, right: number) => 
 
   const sidePlacements = [
     // Side crowd (±Z) — near, mid, far along X axis
-    { px: -80, py: CROWD_H / 2, pz:  OFFSET_Z, ry: Math.PI, tex: "/assets/crowd_side_2.png" },
-    { px:  80, py: CROWD_H / 2, pz:  OFFSET_Z, ry: Math.PI, tex: "/assets/crowd_side_1.png" },
-    { px: 220, py: CROWD_H / 2, pz:  OFFSET_Z, ry: Math.PI, tex: "/assets/crowd_side_2.png" },
-    { px: -80, py: CROWD_H / 2, pz: -OFFSET_Z, ry: 0,       tex: "/assets/crowd_side_1.png" },
-    { px:  80, py: CROWD_H / 2, pz: -OFFSET_Z, ry: 0,       tex: "/assets/crowd_side_2.png" },
-    { px: 220, py: CROWD_H / 2, pz: -OFFSET_Z, ry: 0,       tex: "/assets/crowd_side_1.png" },
+    {
+      px: -80,
+      py: CROWD_H / 2,
+      pz: OFFSET_Z,
+      ry: Math.PI,
+      tex: "/assets/crowd_side_2.png",
+    },
+    {
+      px: 80,
+      py: CROWD_H / 2,
+      pz: OFFSET_Z,
+      ry: Math.PI,
+      tex: "/assets/crowd_side_1.png",
+    },
+    {
+      px: 220,
+      py: CROWD_H / 2,
+      pz: OFFSET_Z,
+      ry: Math.PI,
+      tex: "/assets/crowd_side_2.png",
+    },
+    {
+      px: -80,
+      py: CROWD_H / 2,
+      pz: -OFFSET_Z,
+      ry: 0,
+      tex: "/assets/crowd_side_1.png",
+    },
+    {
+      px: 80,
+      py: CROWD_H / 2,
+      pz: -OFFSET_Z,
+      ry: 0,
+      tex: "/assets/crowd_side_2.png",
+    },
+    {
+      px: 220,
+      py: CROWD_H / 2,
+      pz: -OFFSET_Z,
+      ry: 0,
+      tex: "/assets/crowd_side_1.png",
+    },
     // Back crowd (+X wall) — flanking scoreboard
-    { px: OFFSET_X, py: CROWD_H / 2, pz:  200, ry: Math.PI / 2, tex: "/assets/crowd_side_1.png" },
-    { px: OFFSET_X, py: CROWD_H / 2, pz: -200, ry: Math.PI / 2, tex: "/assets/crowd_side_2.png" },
+    {
+      px: OFFSET_X,
+      py: CROWD_H / 2,
+      pz: 200,
+      ry: Math.PI / 2,
+      tex: "/assets/crowd_side_1.png",
+    },
+    {
+      px: OFFSET_X,
+      py: CROWD_H / 2,
+      pz: -200,
+      ry: Math.PI / 2,
+      tex: "/assets/crowd_side_2.png",
+    },
   ];
 
   const crowdPlanes: Mesh[] = [];
   for (const { px, py, pz, ry, tex } of sidePlacements) {
-    const plane = MeshBuilder.CreatePlane(`crowd_${pz}`, { width: CROWD_W, height: CROWD_H }, scene);
+    const plane = MeshBuilder.CreatePlane(
+      `crowd_${pz}`,
+      { width: CROWD_W, height: CROWD_H },
+      scene,
+    );
     plane.material = makeCrowdMat(tex);
     plane.position.set(px, py, pz);
     plane.rotation.y = ry;
@@ -216,9 +326,18 @@ function loadStadiumEnvironment(scene: Scene): (left: number, right: number) => 
   const TEX_H = 682;
   const BOARD_W = ARENA_HEIGHT * 0.9;
   const BOARD_H = BOARD_W * (TEX_H / TEX_W);
-  const scoreboard = MeshBuilder.CreatePlane("scoreboard", { width: BOARD_W, height: BOARD_H }, scene);
+  const scoreboard = MeshBuilder.CreatePlane(
+    "scoreboard",
+    { width: BOARD_W, height: BOARD_H },
+    scene,
+  );
 
-  const dynTex = new DynamicTexture("scoreboardTex", { width: TEX_W, height: TEX_H }, scene, false);
+  const dynTex = new DynamicTexture(
+    "scoreboardTex",
+    { width: TEX_W, height: TEX_H },
+    scene,
+    false,
+  );
   dynTex.hasAlpha = true;
   const boardMat = new StandardMaterial("boardMat", scene);
   boardMat.diffuseTexture = dynTex;
@@ -292,9 +411,14 @@ function loadStadiumEnvironment(scene: Scene): (left: number, right: number) => 
   return drawScore;
 }
 
-function fitCameraToArena(camera: ArcRotateCamera, engine: Engine, _floor: Mesh) {
+function fitCameraToArena(
+  camera: ArcRotateCamera,
+  engine: Engine,
+  _floor: Mesh,
+) {
   const aspect = engine.getAspectRatio(camera);
-  camera.fovMode = aspect < 1
-    ? Camera.FOVMODE_HORIZONTAL_FIXED
-    : Camera.FOVMODE_VERTICAL_FIXED;
+  camera.fovMode =
+    aspect < 1
+      ? Camera.FOVMODE_HORIZONTAL_FIXED
+      : Camera.FOVMODE_VERTICAL_FIXED;
 }

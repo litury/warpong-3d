@@ -1,5 +1,5 @@
-import type { ServerMessage, PlayerSide } from "../shared/messages";
 import type { GameLogic } from "../game/GameLogic";
+import type { PlayerSide, ServerMessage } from "../shared/messages";
 import type { WsClient } from "./wsClient";
 
 export function processServerMessages(
@@ -26,9 +26,14 @@ export function processServerMessages(
 
       case "GameStateUpdate":
         logic.applyServerState(
-          msg.ball.x, msg.ball.y, msg.ball.vx, msg.ball.vy,
-          msg.leftPaddle.y, msg.rightPaddle.y,
-          msg.score.left, msg.score.right,
+          msg.ball.x,
+          msg.ball.y,
+          msg.ball.vx,
+          msg.ball.vy,
+          msg.leftPaddle.y,
+          msg.rightPaddle.y,
+          msg.score.left,
+          msg.score.right,
         );
         callbacks.onScoreUpdate?.(msg.score.left, msg.score.right);
         break;

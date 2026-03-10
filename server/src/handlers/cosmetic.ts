@@ -1,8 +1,8 @@
 import type { ServerWebSocket } from "bun";
-import type { PlayerData } from "../modules/gameSession";
-import type { ClientMessage } from "../shared";
 import { getPlayer, updateCosmetics } from "../modules/db";
 import type { PlayerRecord } from "../modules/db";
+import type { PlayerData } from "../modules/gameSession";
+import type { ClientMessage } from "../shared";
 
 type SendSync = (ws: ServerWebSocket<PlayerData>, player: PlayerRecord) => void;
 

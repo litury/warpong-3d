@@ -1,12 +1,26 @@
 import {
-  ARENA_WIDTH, ARENA_HEIGHT, PADDLE_WIDTH, PADDLE_HEIGHT,
-  PADDLE_SPEED, PADDLE_MARGIN, BALL_SIZE, BALL_INITIAL_SPEED,
-  BALL_SPEED_INCREMENT, BALL_MAX_SPEED, WALL_INSET, WIN_SCORE,
+  ARENA_HEIGHT,
+  ARENA_WIDTH,
+  BALL_INITIAL_SPEED,
+  BALL_MAX_SPEED,
+  BALL_SIZE,
+  BALL_SPEED_INCREMENT,
+  PADDLE_HEIGHT,
+  PADDLE_MARGIN,
+  PADDLE_SPEED,
+  PADDLE_WIDTH,
+  WALL_INSET,
+  WIN_SCORE,
 } from "../config/gameConfig";
 import type { BallData, Score } from "../types";
 
 export class GameLogic {
-  ball: BallData = { x: 0, y: 0, vx: BALL_INITIAL_SPEED, vy: BALL_INITIAL_SPEED * 0.3 };
+  ball: BallData = {
+    x: 0,
+    y: 0,
+    vx: BALL_INITIAL_SPEED,
+    vy: BALL_INITIAL_SPEED * 0.3,
+  };
   leftPaddleY = 0;
   rightPaddleY = 0;
   score: Score = { left: 0, right: 0 };
@@ -73,7 +87,17 @@ export class GameLogic {
 
     // Left paddle
     const lpX = -ARENA_WIDTH / 2 + PADDLE_MARGIN;
-    if (this.aabbCollision(b.x, b.y, BALL_SIZE, lpX, this.leftPaddleY, PADDLE_WIDTH, this.paddleHeight)) {
+    if (
+      this.aabbCollision(
+        b.x,
+        b.y,
+        BALL_SIZE,
+        lpX,
+        this.leftPaddleY,
+        PADDLE_WIDTH,
+        this.paddleHeight,
+      )
+    ) {
       const hitOffset = (b.y - this.leftPaddleY) / (this.paddleHeight / 2);
       const bounce = this.applyPaddleBounce(b.vx, b.vy, hitOffset, false);
       b.vx = bounce.vx;
@@ -83,7 +107,17 @@ export class GameLogic {
 
     // Right paddle
     const rpX = ARENA_WIDTH / 2 - PADDLE_MARGIN;
-    if (this.aabbCollision(b.x, b.y, BALL_SIZE, rpX, this.rightPaddleY, PADDLE_WIDTH, this.paddleHeight)) {
+    if (
+      this.aabbCollision(
+        b.x,
+        b.y,
+        BALL_SIZE,
+        rpX,
+        this.rightPaddleY,
+        PADDLE_WIDTH,
+        this.paddleHeight,
+      )
+    ) {
       const hitOffset = (b.y - this.rightPaddleY) / (this.paddleHeight / 2);
       const bounce = this.applyPaddleBounce(b.vx, b.vy, hitOffset, true);
       b.vx = bounce.vx;
@@ -129,8 +163,13 @@ export class GameLogic {
   }
 
   private aabbCollision(
-    ax: number, ay: number, aSize: number,
-    bx: number, by: number, bWidth: number, bHeight: number,
+    ax: number,
+    ay: number,
+    aSize: number,
+    bx: number,
+    by: number,
+    bWidth: number,
+    bHeight: number,
   ): boolean {
     const aHalf = aSize / 2;
     const bHalfW = bWidth / 2;
@@ -144,9 +183,14 @@ export class GameLogic {
   }
 
   private applyPaddleBounce(
-    vx: number, vy: number, hitOffset: number, isRightPaddle: boolean,
+    vx: number,
+    vy: number,
+    hitOffset: number,
+    isRightPaddle: boolean,
   ): { vx: number; vy: number } {
-    const speed = Math.min(Math.sqrt(vx * vx + vy * vy), BALL_MAX_SPEED) + BALL_SPEED_INCREMENT;
+    const speed =
+      Math.min(Math.sqrt(vx * vx + vy * vy), BALL_MAX_SPEED) +
+      BALL_SPEED_INCREMENT;
     const angle = Math.max(-1, Math.min(1, hitOffset)) * (Math.PI / 4);
     const dirX = isRightPaddle ? -1 : 1;
     return {
@@ -156,8 +200,14 @@ export class GameLogic {
   }
 
   applyServerState(
-    ballX: number, ballY: number, ballVx: number, ballVy: number,
-    leftY: number, rightY: number, scoreLeft: number, scoreRight: number,
+    ballX: number,
+    ballY: number,
+    ballVx: number,
+    ballVy: number,
+    leftY: number,
+    rightY: number,
+    scoreLeft: number,
+    scoreRight: number,
   ) {
     this.ball.x = ballX;
     this.ball.y = ballY;

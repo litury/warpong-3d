@@ -10,9 +10,16 @@ export class InputManager {
     window.addEventListener("keydown", (e) => this.keys.add(e.code));
     window.addEventListener("keyup", (e) => this.keys.delete(e.code));
 
-    canvas.addEventListener("touchstart", (e) => this.handleTouch(e), { passive: false });
-    canvas.addEventListener("touchmove", (e) => this.handleTouch(e), { passive: false });
-    canvas.addEventListener("touchend", () => { this.touchX = null; this.touchY = null; });
+    canvas.addEventListener("touchstart", (e) => this.handleTouch(e), {
+      passive: false,
+    });
+    canvas.addEventListener("touchmove", (e) => this.handleTouch(e), {
+      passive: false,
+    });
+    canvas.addEventListener("touchend", () => {
+      this.touchX = null;
+      this.touchY = null;
+    });
   }
 
   private handleTouch(e: TouchEvent) {
@@ -26,8 +33,20 @@ export class InputManager {
 
   /** Keyboard direction: A/Left/Up/W = -1 (left), D/Right/Down/S = +1 (right) */
   getDirection(): number {
-    if (this.keys.has("KeyA") || this.keys.has("ArrowLeft") || this.keys.has("ArrowUp") || this.keys.has("KeyW")) return -1;
-    if (this.keys.has("KeyD") || this.keys.has("ArrowRight") || this.keys.has("ArrowDown") || this.keys.has("KeyS")) return 1;
+    if (
+      this.keys.has("KeyA") ||
+      this.keys.has("ArrowLeft") ||
+      this.keys.has("ArrowUp") ||
+      this.keys.has("KeyW")
+    )
+      return -1;
+    if (
+      this.keys.has("KeyD") ||
+      this.keys.has("ArrowRight") ||
+      this.keys.has("ArrowDown") ||
+      this.keys.has("KeyS")
+    )
+      return 1;
     return 0;
   }
 

@@ -1,17 +1,23 @@
 import {
-  ARENA_WIDTH,
   ARENA_HEIGHT,
-  BALL_SIZE,
+  ARENA_WIDTH,
   BALL_INITIAL_SPEED,
-  PADDLE_SPEED,
+  BALL_SIZE,
   PADDLE_HEIGHT,
   PADDLE_MARGIN,
-  WIN_SCORE,
+  PADDLE_SPEED,
   TICK_INTERVAL_MS,
   WALL_INSET,
+  WIN_SCORE,
 } from "../../../config";
-import type { BallState, PaddleDirection, ScoreState, GameEvent, PlayerUpgrades } from "../../../shared";
-import { checkWallCollisions, checkPaddleCollision } from "./collision";
+import type {
+  BallState,
+  GameEvent,
+  PaddleDirection,
+  PlayerUpgrades,
+  ScoreState,
+} from "../../../shared";
+import { checkPaddleCollision, checkWallCollisions } from "./collision";
 
 const HALF_W = ARENA_WIDTH / 2;
 const HALF_H = ARENA_HEIGHT / 2;
@@ -38,7 +44,11 @@ export interface TickResult {
 }
 
 function computeStats(upgrades: PlayerUpgrades | null) {
-  const u = upgrades ?? { paddleSpeedLevel: 0, paddleSizeLevel: 0, ballSpeedLevel: 0 };
+  const u = upgrades ?? {
+    paddleSpeedLevel: 0,
+    paddleSizeLevel: 0,
+    ballSpeedLevel: 0,
+  };
   return {
     paddleSpeed: PADDLE_SPEED + u.paddleSpeedLevel * 50,
     paddleHeight: PADDLE_HEIGHT + u.paddleSizeLevel * 15,
@@ -52,7 +62,9 @@ export function createInitialState(
 ): SimulationState {
   const left = computeStats(leftUpgrades);
   const right = computeStats(rightUpgrades);
-  const ballInitialSpeed = Math.round((left.ballSpeedContrib + right.ballSpeedContrib) / 2);
+  const ballInitialSpeed = Math.round(
+    (left.ballSpeedContrib + right.ballSpeedContrib) / 2,
+  );
 
   return {
     ball: { x: 0, y: 0, vx: ballInitialSpeed, vy: ballInitialSpeed * 0.5 },
@@ -90,10 +102,24 @@ export function tick(state: SimulationState): TickResult {
   const leftPaddleX = -HALF_W + PADDLE_MARGIN;
   const rightPaddleX = HALF_W - PADDLE_MARGIN;
 
-  if (checkPaddleCollision(state.ball, state.leftPaddleY, leftPaddleX, state.leftPaddleHeight)) {
+  if (
+    checkPaddleCollision(
+      state.ball,
+      state.leftPaddleY,
+      leftPaddleX,
+      state.leftPaddleHeight,
+    )
+  ) {
     events.push({ type: "BallHitPaddle" });
   }
-  if (checkPaddleCollision(state.ball, state.rightPaddleY, rightPaddleX, state.rightPaddleHeight)) {
+  if (
+    checkPaddleCollision(
+      state.ball,
+      state.rightPaddleY,
+      rightPaddleX,
+      state.rightPaddleHeight,
+    )
+  ) {
     events.push({ type: "BallHitPaddle" });
   }
 
@@ -123,10 +149,16 @@ export function tick(state: SimulationState): TickResult {
   return { events, gameOver, winner };
 }
 
-function movePaddle(state: SimulationState, side: "left" | "right", dt: number): void {
+function movePaddle(
+  state: SimulationState,
+  side: "left" | "right",
+  dt: number,
+): void {
   const input = side === "left" ? state.leftInput : state.rightInput;
-  const speed = side === "left" ? state.leftPaddleSpeed : state.rightPaddleSpeed;
-  const height = side === "left" ? state.leftPaddleHeight : state.rightPaddleHeight;
+  const speed =
+    side === "left" ? state.leftPaddleSpeed : state.rightPaddleSpeed;
+  const height =
+    side === "left" ? state.leftPaddleHeight : state.rightPaddleHeight;
   const bound = HALF_H - WALL_INSET - height / 2;
 
   let direction = 0;

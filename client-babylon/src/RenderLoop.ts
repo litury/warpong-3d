@@ -1,14 +1,14 @@
 import type { Engine } from "@babylonjs/core/Engines/engine";
 import type { Scene } from "@babylonjs/core/scene";
-import type { GameObjects } from "./game/GameScene";
-import type { GameLogic } from "./game/GameLogic";
-import type { InputManager } from "./game/InputManager";
-import type { WsClient } from "./network/wsClient";
-import type { ZombieManager } from "./game/ZombieManager";
-import type { UIManager } from "./UIManager";
 import type { AppState } from "./AppState";
-import { processServerMessages } from "./network/sync";
+import type { UIManager } from "./UIManager";
 import { BALL_SIZE } from "./config/gameConfig";
+import type { GameLogic } from "./game/GameLogic";
+import type { GameObjects } from "./game/GameScene";
+import type { InputManager } from "./game/InputManager";
+import type { ZombieManager } from "./game/ZombieManager";
+import { processServerMessages } from "./network/sync";
+import type { WsClient } from "./network/wsClient";
 
 const ROTATION_SPEED = 8;
 const IDLE_DELAY = 0.1;
@@ -115,9 +115,17 @@ function updateMechAnimations(
 
   if (leftMoving) {
     const targetY = dir < 0 ? 0 : Math.PI;
-    obj.leftMech.root.rotation.y = lerpAngle(obj.leftMech.root.rotation.y, targetY, ROTATION_SPEED * dt);
+    obj.leftMech.root.rotation.y = lerpAngle(
+      obj.leftMech.root.rotation.y,
+      targetY,
+      ROTATION_SPEED * dt,
+    );
   } else {
-    obj.leftMech.root.rotation.y = lerpAngle(obj.leftMech.root.rotation.y, LEFT_IDLE_FACING, ROTATION_SPEED * dt);
+    obj.leftMech.root.rotation.y = lerpAngle(
+      obj.leftMech.root.rotation.y,
+      LEFT_IDLE_FACING,
+      ROTATION_SPEED * dt,
+    );
   }
 
   if (rightMoving) {
@@ -139,9 +147,17 @@ function updateMechAnimations(
   if (rightMoving) {
     const rightDir = logic.rightPaddleY > state.prevRightY ? 1 : -1;
     const targetY = rightDir < 0 ? 0 : Math.PI;
-    obj.rightMech.root.rotation.y = lerpAngle(obj.rightMech.root.rotation.y, targetY, ROTATION_SPEED * dt);
+    obj.rightMech.root.rotation.y = lerpAngle(
+      obj.rightMech.root.rotation.y,
+      targetY,
+      ROTATION_SPEED * dt,
+    );
   } else {
-    obj.rightMech.root.rotation.y = lerpAngle(obj.rightMech.root.rotation.y, RIGHT_IDLE_FACING, ROTATION_SPEED * dt);
+    obj.rightMech.root.rotation.y = lerpAngle(
+      obj.rightMech.root.rotation.y,
+      RIGHT_IDLE_FACING,
+      ROTATION_SPEED * dt,
+    );
   }
 }
 

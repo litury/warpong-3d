@@ -1,7 +1,7 @@
-import type { GameLogic } from "./game/GameLogic";
-import type { WsClient } from "./network/wsClient";
-import type { ZombieManager } from "./game/ZombieManager";
 import type { AppState } from "./AppState";
+import type { GameLogic } from "./game/GameLogic";
+import type { ZombieManager } from "./game/ZombieManager";
+import type { WsClient } from "./network/wsClient";
 
 export interface UIElements {
   hud: HTMLElement;

@@ -1,4 +1,4 @@
-import type { ClientMessage, QuickChatId, PaddleDirection } from "../shared";
+import type { ClientMessage, PaddleDirection, QuickChatId } from "../shared";
 
 const VALID_TYPES = new Set([
   "Auth",
@@ -13,7 +13,14 @@ const VALID_TYPES = new Set([
 ]);
 
 const VALID_DIRECTIONS = new Set<PaddleDirection>(["Up", "Down", "Idle"]);
-const VALID_CHAT_IDS = new Set<QuickChatId>(["gg", "nice", "wow", "glhf", "oops", "rematch"]);
+const VALID_CHAT_IDS = new Set<QuickChatId>([
+  "gg",
+  "nice",
+  "wow",
+  "glhf",
+  "oops",
+  "rematch",
+]);
 const VALID_COSMETIC_SLOTS = new Set(["paddleColor", "ballTrail"]);
 
 export function validateMessage(raw: unknown): ClientMessage | null {
@@ -27,7 +34,12 @@ export function validateMessage(raw: unknown): ClientMessage | null {
       if (typeof obj.signature !== "string") return null;
       if (typeof obj.uniqueId !== "string" || obj.uniqueId === "") return null;
       if (typeof obj.name !== "string" || obj.name === "") return null;
-      return { type: "Auth", signature: obj.signature, uniqueId: obj.uniqueId, name: obj.name };
+      return {
+        type: "Auth",
+        signature: obj.signature,
+        uniqueId: obj.uniqueId,
+        name: obj.name,
+      };
 
     case "JoinQueue":
     case "LeaveQueue":
@@ -35,14 +47,18 @@ export function validateMessage(raw: unknown): ClientMessage | null {
 
     case "PlayerInput":
       if (!VALID_DIRECTIONS.has(obj.direction as PaddleDirection)) return null;
-      return { type: "PlayerInput", direction: obj.direction as PaddleDirection };
+      return {
+        type: "PlayerInput",
+        direction: obj.direction as PaddleDirection,
+      };
 
     case "QuickChat":
       if (!VALID_CHAT_IDS.has(obj.chatId as QuickChatId)) return null;
       return { type: "QuickChat", chatId: obj.chatId as QuickChatId };
 
     case "BuyUpgrade":
-      if (typeof obj.upgradeId !== "string" || obj.upgradeId === "") return null;
+      if (typeof obj.upgradeId !== "string" || obj.upgradeId === "")
+        return null;
       return { type: "BuyUpgrade", upgradeId: obj.upgradeId };
 
     case "EquipCosmetic":
@@ -56,11 +72,13 @@ export function validateMessage(raw: unknown): ClientMessage | null {
       };
 
     case "RewardCoins":
-      if (typeof obj.amount !== "number" || !Number.isFinite(obj.amount)) return null;
+      if (typeof obj.amount !== "number" || !Number.isFinite(obj.amount))
+        return null;
       return { type: "RewardCoins", amount: obj.amount };
 
     case "PurchaseCoins":
-      if (typeof obj.productId !== "string" || obj.productId === "") return null;
+      if (typeof obj.productId !== "string" || obj.productId === "")
+        return null;
       return { type: "PurchaseCoins", productId: obj.productId };
 
     default:
