@@ -1,6 +1,6 @@
 import type { ClientMessage, ServerMessage } from "../shared/messages";
 
-const SERVER_URL = "ws://localhost:3030";
+const SERVER_URL = __WS_URL__;
 
 export class WsClient {
   private ws: WebSocket | null = null;
