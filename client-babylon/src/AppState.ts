@@ -2,25 +2,27 @@ import type { PlayerSide } from "./shared/messages";
 
 export type GameMode = "solo" | "online";
 
+export interface MechAnimState {
+  walking: boolean;
+  idleTimer: number;
+  prevY: number;
+}
+
+function createMechAnimState(): MechAnimState {
+  return { walking: false, idleTimer: 0, prevY: 0 };
+}
+
 export class AppState {
   mode: GameMode = "solo";
   playerSide: PlayerSide | null = null;
   playing = false;
 
-  prevLeftY = 0;
-  prevRightY = 0;
-  leftWalking = false;
-  rightWalking = false;
-  leftIdleTimer = 0;
-  rightIdleTimer = 0;
+  leftMech = createMechAnimState();
+  rightMech = createMechAnimState();
 
   resetForNewGame() {
-    this.prevLeftY = 0;
-    this.prevRightY = 0;
-    this.leftWalking = false;
-    this.rightWalking = false;
-    this.leftIdleTimer = 0;
-    this.rightIdleTimer = 0;
+    this.leftMech = createMechAnimState();
+    this.rightMech = createMechAnimState();
     this.playing = true;
   }
 
