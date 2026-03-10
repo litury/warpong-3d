@@ -42,6 +42,8 @@ export type ServerMessage =
   | { type: "GameEvent"; event: GameEvent }
   | { type: "GameOver"; winner: PlayerSide; reward: number; mmr: number; mmrChange: number; coins: number }
   | { type: "OpponentDisconnected"; reward: number; coins: number }
+  | { type: "QueueStatus"; estimatedWaitSec: number; rangeWidth: number }
+  | { type: "QueueTimeout" }
   | { type: "OnlineCount"; count: number }
   | { type: "OpponentChat"; chatId: QuickChatId };
 

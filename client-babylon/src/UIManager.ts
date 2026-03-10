@@ -64,6 +64,25 @@ export class UIManager {
     this.ui.status.textContent = "Waiting for opponent...";
   }
 
+  showQueueStatus(estimatedWaitSec: number) {
+    if (estimatedWaitSec <= 0) {
+      this.ui.status.textContent = "Matching...";
+    } else {
+      const m = Math.floor(estimatedWaitSec / 60);
+      const s = estimatedWaitSec % 60;
+      const time = m > 0 ? `~${m}m ${s}s` : `~${s}s`;
+      this.ui.status.textContent = `Searching for opponent... ${time}`;
+    }
+  }
+
+  showQueueTimeout() {
+    this.ui.status.textContent = "No opponent found. Try again later.";
+    setTimeout(() => {
+      this.ui.status.style.display = "none";
+      this.showMenu();
+    }, 3000);
+  }
+
   showGameOver(text: string) {
     this.ui.resultText.textContent = text;
     this.ui.gameOver.style.display = "block";
