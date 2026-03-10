@@ -1,0 +1,11 @@
+{
+  "name": "pong-yandex",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev:server": "cd server && bun run dev",
+    "dev:client": "cd client-babylon && npm run dev",
+    "test": "cd server && bun test",
+    "typecheck": "cd client-babylon && npx tsc --noEmit && cd ../server && bunx tsc --noEmit"
+  }
+}
