@@ -166,13 +166,10 @@ export class ZombieManager {
   }
 
   private checkFights() {
-    const walking = this.zombies.filter((z) => z.state === "walking");
-    const left = walking.filter((z) => z.side === "left");
-    const right = walking.filter((z) => z.side === "right");
-
-    for (const l of left) {
-      for (const r of right) {
-        if (r.state !== "walking") continue;
+    for (const l of this.zombies) {
+      if (l.state !== "walking" || l.side !== "left") continue;
+      for (const r of this.zombies) {
+        if (r.state !== "walking" || r.side !== "right") continue;
         const dx = l.x - r.x;
         const dz = l.z - r.z;
         const dist = Math.sqrt(dx * dx + dz * dz);
@@ -256,7 +253,10 @@ export class ZombieManager {
     const count = this.waveNumber;
     const bound = ARENA_HEIGHT / 2 - WALL_INSET;
 
-    const activeCount = this.zombies.filter((z) => z.state !== "dying").length;
+    let activeCount = 0;
+    for (const z of this.zombies) {
+      if (z.state !== "dying") activeCount++;
+    }
     const slotsLeft = MAX_ZOMBIES - activeCount;
     const toSpawn = Math.min(count, slotsLeft);
 
@@ -323,25 +323,23 @@ export class ZombieManager {
   }
 
   private cleanupDead() {
-    const toRecycle: Zombie[] = [];
-    for (const z of this.zombies) {
+    let write = 0;
+    for (let read = 0; read < this.zombies.length; read++) {
+      const z = this.zombies[read];
       if (z.state === "dying" && z.deathTimer >= BODY_LINGER) {
-        toRecycle.push(z);
-      }
-    }
-    for (const z of toRecycle) {
-      hideZombie(z.instance);
-      z.instance.root.rotation.set(0, 0, 0);
-      for (const mesh of z.instance.meshes) mesh.visibility = 1;
-      if (this.pool.length < MAX_POOL) {
-        this.pool.push(z.instance);
+        hideZombie(z.instance);
+        z.instance.root.rotation.set(0, 0, 0);
+        for (const mesh of z.instance.meshes) mesh.visibility = 1;
+        if (this.pool.length < MAX_POOL) {
+          this.pool.push(z.instance);
+        } else {
+          disposeZombie(z.instance);
+        }
       } else {
-        disposeZombie(z.instance);
+        this.zombies[write++] = z;
       }
     }
-    this.zombies = this.zombies.filter(
-      (z) => !(z.state === "dying" && z.deathTimer >= BODY_LINGER),
-    );
+    this.zombies.length = write;
   }
 
   dispose() {
