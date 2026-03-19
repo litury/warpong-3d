@@ -1,10 +1,10 @@
-import { Scene } from "@babylonjs/core/scene";
+import type { AnimationGroup } from "@babylonjs/core/Animations/animationGroup";
+import type { Skeleton } from "@babylonjs/core/Bones/skeleton";
 import { SceneLoader } from "@babylonjs/core/Loading/sceneLoader";
-import { AssetContainer } from "@babylonjs/core/assetContainer";
-import { AnimationGroup } from "@babylonjs/core/Animations/animationGroup";
-import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
-import { Skeleton } from "@babylonjs/core/Bones/skeleton";
+import type { TransformNode } from "@babylonjs/core/Meshes/transformNode";
+import type { AssetContainer } from "@babylonjs/core/assetContainer";
+import type { Scene } from "@babylonjs/core/scene";
 import "@babylonjs/loaders/glTF";
 
 export interface ZombieInstance {
@@ -25,12 +25,18 @@ let container: AssetContainer | null = null;
 let zombieCounter = 0;
 
 function findAnim(groups: AnimationGroup[], keyword: string): AnimationGroup {
-  return groups.find(ag => ag.name.toLowerCase().includes(keyword)) || groups[0];
+  return (
+    groups.find((ag) => ag.name.toLowerCase().includes(keyword)) || groups[0]
+  );
 }
 
 async function ensureContainer(scene: Scene): Promise<AssetContainer> {
   if (container) return container;
-  container = await SceneLoader.LoadAssetContainerAsync("/assets/", "zombie.glb", scene);
+  container = await SceneLoader.LoadAssetContainerAsync(
+    "/assets/",
+    "zombie.glb",
+    scene,
+  );
   return container;
 }
 
@@ -39,7 +45,7 @@ export async function spawnZombie(scene: Scene): Promise<ZombieInstance> {
   const id = zombieCounter++;
   const prefix = `zombie_${id}`;
 
-  const inst = c.instantiateModelsToScene(name => `${prefix}_${name}`, false);
+  const inst = c.instantiateModelsToScene((name) => `${prefix}_${name}`, false);
 
   // Root node
   const root = inst.rootNodes[0] as TransformNode;
@@ -61,7 +67,9 @@ export async function spawnZombie(scene: Scene): Promise<ZombieInstance> {
   for (const a of ag) a.stop();
 
   return {
-    root, meshes, skeleton,
+    root,
+    meshes,
+    skeleton,
     walkAnim: findAnim(ag, "walking_man"),
     monsterWalkAnim: findAnim(ag, "monster_walk"),
     injuredWalkAnim: findAnim(ag, "injured_walk"),
@@ -73,8 +81,12 @@ export async function spawnZombie(scene: Scene): Promise<ZombieInstance> {
   };
 }
 
-export function scaleZombieToHeight(zombie: ZombieInstance, targetHeight: number) {
-  let minY = Infinity, maxY = -Infinity;
+export function scaleZombieToHeight(
+  zombie: ZombieInstance,
+  targetHeight: number,
+) {
+  let minY = Number.POSITIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
   for (const mesh of zombie.meshes) {
     mesh.computeWorldMatrix(true);
     const bounds = mesh.getBoundingInfo();
@@ -91,9 +103,14 @@ export function scaleZombieToHeight(zombie: ZombieInstance, targetHeight: number
 }
 
 const ALL_ANIM_KEYS: (keyof ZombieInstance)[] = [
-  "walkAnim", "monsterWalkAnim", "injuredWalkAnim",
-  "attackAnim", "punchComboAnim",
-  "dieAnim", "dyingBackwardsAnim", "screamAnim",
+  "walkAnim",
+  "monsterWalkAnim",
+  "injuredWalkAnim",
+  "attackAnim",
+  "punchComboAnim",
+  "dieAnim",
+  "dyingBackwardsAnim",
+  "screamAnim",
 ];
 
 export function stopAllAnims(zombie: ZombieInstance) {
@@ -127,7 +144,7 @@ export function disposeZombie(zombie: ZombieInstance) {
   }
   for (const mesh of zombie.meshes) mesh.dispose();
   if (zombie.skeleton) zombie.skeleton.dispose();
-  zombie.root.getChildTransformNodes(false).forEach(n => n.dispose());
+  for (const n of zombie.root.getChildTransformNodes(false)) n.dispose();
   zombie.root.dispose();
 }
 

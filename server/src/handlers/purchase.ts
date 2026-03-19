@@ -1,9 +1,9 @@
 import type { ServerWebSocket } from "bun";
+import { CATALOG } from "../catalog";
+import { addCoins, getPlayer, updateUpgrades } from "../modules/db";
+import type { PlayerRecord } from "../modules/db";
 import type { PlayerData } from "../modules/gameSession";
 import type { ClientMessage } from "../shared";
-import { CATALOG } from "../catalog";
-import { getPlayer, addCoins, updateUpgrades } from "../modules/db";
-import type { PlayerRecord } from "../modules/db";
 
 type SendSync = (ws: ServerWebSocket<PlayerData>, player: PlayerRecord) => void;
 
@@ -53,7 +53,9 @@ export function handleRewardCoins(
   const now = Date.now();
   const lastTime = lastRewardTime.get(ws.data.playerId) ?? 0;
   if (now - lastTime < REWARD_COOLDOWN_MS) {
-    console.log(`[anti-fraud] RewardCoins cooldown for ${ws.data.playerId}, ${Math.ceil((REWARD_COOLDOWN_MS - (now - lastTime)) / 1000)}s remaining`);
+    console.log(
+      `[anti-fraud] RewardCoins cooldown for ${ws.data.playerId}, ${Math.ceil((REWARD_COOLDOWN_MS - (now - lastTime)) / 1000)}s remaining`,
+    );
     return;
   }
   const amount = Math.min(Math.max(0, msg.amount), REWARD_MAX_AMOUNT);
@@ -73,14 +75,18 @@ export function handlePurchaseCoins(
 ): void {
   const iapAmount = IAP_PRODUCTS[msg.productId];
   if (!iapAmount) {
-    console.log(`[anti-fraud] Unknown productId: ${msg.productId} from ${ws.data.playerId}`);
+    console.log(
+      `[anti-fraud] Unknown productId: ${msg.productId} from ${ws.data.playerId}`,
+    );
     return;
   }
   const newCoins = addCoins(ws.data.playerId, iapAmount);
   ws.data.coins = newCoins;
   const updated = getPlayer(ws.data.playerId)!;
   sendPlayerSync(ws, updated);
-  console.log(`[iap] ${ws.data.playerId} purchased ${msg.productId} +${iapAmount} coins`);
+  console.log(
+    `[iap] ${ws.data.playerId} purchased ${msg.productId} +${iapAmount} coins`,
+  );
 }
 
 export function clearRewardCooldown(playerId: string): void {

@@ -1,10 +1,22 @@
-import { Scene } from "@babylonjs/core/scene";
-import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
-import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { Texture } from "@babylonjs/core/Materials/Textures/texture";
-import { Mesh } from "@babylonjs/core/Meshes/mesh";
-import { ARENA_WIDTH, ARENA_HEIGHT, PADDLE_MARGIN, WALL_INSET } from "../config/gameConfig";
-import { spawnZombie, scaleZombieToHeight, hideZombie, showZombie, disposeZombie, stopAllAnims } from "./ZombieLoader";
+import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
+import type { Mesh } from "@babylonjs/core/Meshes/mesh";
+import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
+import type { Scene } from "@babylonjs/core/scene";
+import {
+  ARENA_HEIGHT,
+  ARENA_WIDTH,
+  PADDLE_MARGIN,
+  WALL_INSET,
+} from "../config/gameConfig";
+import {
+  disposeZombie,
+  hideZombie,
+  scaleZombieToHeight,
+  showZombie,
+  spawnZombie,
+  stopAllAnims,
+} from "./ZombieLoader";
 import type { ZombieInstance } from "./ZombieLoader";
 
 const ZOMBIE_SIZE = 30;
@@ -72,7 +84,9 @@ export class ZombieManager {
       if (z.spawnTimer >= SCREAM_DURATION) {
         z.state = "walking";
         stopAllAnims(z.instance);
-        const walkAnim = z.useAltWalk ? z.instance.injuredWalkAnim : z.instance.monsterWalkAnim;
+        const walkAnim = z.useAltWalk
+          ? z.instance.injuredWalkAnim
+          : z.instance.monsterWalkAnim;
         walkAnim.start(true);
       }
     }
@@ -152,9 +166,9 @@ export class ZombieManager {
   }
 
   private checkFights() {
-    const walking = this.zombies.filter(z => z.state === "walking");
-    const left = walking.filter(z => z.side === "left");
-    const right = walking.filter(z => z.side === "right");
+    const walking = this.zombies.filter((z) => z.state === "walking");
+    const left = walking.filter((z) => z.side === "left");
+    const right = walking.filter((z) => z.side === "right");
 
     for (const l of left) {
       for (const r of right) {
@@ -175,8 +189,12 @@ export class ZombieManager {
           // Play attack animations
           stopAllAnims(l.instance);
           stopAllAnims(r.instance);
-          const lAnim = l.useAltAttack ? l.instance.punchComboAnim : l.instance.attackAnim;
-          const rAnim = r.useAltAttack ? r.instance.punchComboAnim : r.instance.attackAnim;
+          const lAnim = l.useAltAttack
+            ? l.instance.punchComboAnim
+            : l.instance.attackAnim;
+          const rAnim = r.useAltAttack
+            ? r.instance.punchComboAnim
+            : r.instance.attackAnim;
           lAnim.start(true);
           rAnim.start(true);
           break;
@@ -190,7 +208,9 @@ export class ZombieManager {
     z.state = "dying";
     z.deathTimer = 0;
     stopAllAnims(z.instance);
-    const deathAnim = z.useAltDeath ? z.instance.dyingBackwardsAnim : z.instance.dieAnim;
+    const deathAnim = z.useAltDeath
+      ? z.instance.dyingBackwardsAnim
+      : z.instance.dieAnim;
     deathAnim.start(false);
     this.spawnDecal(z.x, z.z);
   }
@@ -202,7 +222,10 @@ export class ZombieManager {
   private spawnDecal(x: number, z: number) {
     if (!this.decalMat) {
       this.decalMat = new StandardMaterial("bloodMat", this.scene);
-      this.decalMat.diffuseTexture = new Texture("/assets/blood_decal.png", this.scene);
+      this.decalMat.diffuseTexture = new Texture(
+        "/assets/blood_decal.png",
+        this.scene,
+      );
       this.decalMat.diffuseTexture.hasAlpha = true;
       this.decalMat.useAlphaFromDiffuseTexture = true;
       this.decalMat.disableLighting = true;
@@ -216,7 +239,11 @@ export class ZombieManager {
       old.dispose();
     }
 
-    const decal = MeshBuilder.CreateGround("blood", { width: DECAL_SIZE, height: DECAL_SIZE }, this.scene);
+    const decal = MeshBuilder.CreateGround(
+      "blood",
+      { width: DECAL_SIZE, height: DECAL_SIZE },
+      this.scene,
+    );
     decal.position.set(x, 0.05, z);
     decal.rotation.y = Math.random() * Math.PI * 2;
     decal.material = this.decalMat;
@@ -229,16 +256,17 @@ export class ZombieManager {
     const count = this.waveNumber;
     const bound = ARENA_HEIGHT / 2 - WALL_INSET;
 
-    const activeCount = this.zombies.filter(z => z.state !== "dying").length;
+    const activeCount = this.zombies.filter((z) => z.state !== "dying").length;
     const slotsLeft = MAX_ZOMBIES - activeCount;
     const toSpawn = Math.min(count, slotsLeft);
 
     const promises: Promise<void>[] = [];
     for (let i = 0; i < toSpawn; i++) {
       const side: ZombieSide = i % 2 === 0 ? "left" : "right";
-      const spawnX = side === "left"
-        ? -ARENA_WIDTH / 2 + PADDLE_MARGIN + 40
-        : ARENA_WIDTH / 2 - PADDLE_MARGIN - 40;
+      const spawnX =
+        side === "left"
+          ? -ARENA_WIDTH / 2 + PADDLE_MARGIN + 40
+          : ARENA_WIDTH / 2 - PADDLE_MARGIN - 40;
       const spawnZ = (Math.random() - 0.5) * bound * 2;
       promises.push(this.spawnOne(side, spawnX, spawnZ));
     }
@@ -279,7 +307,10 @@ export class ZombieManager {
     instance.root.rotation.y = side === "left" ? Math.PI : 0;
 
     this.zombies.push({
-      instance, x, z, side,
+      instance,
+      x,
+      z,
+      side,
       state: "spawning",
       fightTimer: 0,
       deathTimer: 0,
@@ -308,7 +339,9 @@ export class ZombieManager {
         disposeZombie(z.instance);
       }
     }
-    this.zombies = this.zombies.filter(z => !(z.state === "dying" && z.deathTimer >= BODY_LINGER));
+    this.zombies = this.zombies.filter(
+      (z) => !(z.state === "dying" && z.deathTimer >= BODY_LINGER),
+    );
   }
 
   dispose() {

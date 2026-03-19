@@ -1,4 +1,4 @@
-import { createHmac } from "crypto";
+import { createHmac } from "node:crypto";
 
 const YANDEX_SECRET = process.env.YANDEX_GAMES_SECRET;
 
@@ -10,7 +10,7 @@ if (!YANDEX_SECRET) {
 
 export function verifyYandexSignature(signature: string): {
   valid: boolean;
-  playerData: any;
+  playerData: unknown;
 } {
   const parts = signature.split(".");
   if (parts.length !== 2) return { valid: false, playerData: null };
@@ -24,7 +24,7 @@ export function verifyYandexSignature(signature: string): {
     return { valid: false, playerData: null };
   }
 
-  let playerData: any;
+  let playerData: unknown;
   try {
     playerData = JSON.parse(decoded);
   } catch {

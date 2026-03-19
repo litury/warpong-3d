@@ -6,6 +6,14 @@
     "dev:server": "cd server && bun run dev",
     "dev:client": "cd client-babylon && npm run dev",
     "test": "cd server && bun test",
-    "typecheck": "cd client-babylon && npx tsc --noEmit && cd ../server && bunx tsc --noEmit"
+    "typecheck": "cd client-babylon && npx tsc --noEmit && cd ../server && bunx tsc --noEmit",
+    "lint": "biome lint .",
+    "lint:fix": "biome lint --write .",
+    "format": "biome format --write .",
+    "check": "biome check .",
+    "check:fix": "biome check --write ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.0"
   }
 }

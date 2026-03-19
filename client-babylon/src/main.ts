@@ -1,12 +1,12 @@
 import { Engine } from "@babylonjs/core/Engines/engine";
-import { createGameScene } from "./game/GameScene";
+import { AppState } from "./AppState";
+import { startRenderLoop } from "./RenderLoop";
+import { UIManager, queryUIElements } from "./UIManager";
 import { GameLogic } from "./game/GameLogic";
+import { createGameScene } from "./game/GameScene";
 import { InputManager } from "./game/InputManager";
 import { ZombieManager } from "./game/ZombieManager";
 import { WsClient } from "./network/wsClient";
-import { AppState } from "./AppState";
-import { queryUIElements, UIManager } from "./UIManager";
-import { startRenderLoop } from "./RenderLoop";
 
 const canvas = document.getElementById("renderCanvas") as HTMLCanvasElement;
 
@@ -53,9 +53,26 @@ async function main() {
 
   zombieManager.onZombieKilled = () => ui.updateCoins(zombieManager);
 
-  ui.bindMenuButtons({ state, logic, ws, zombieManager, onStartGame: startGame });
+  ui.bindMenuButtons({
+    state,
+    logic,
+    ws,
+    zombieManager,
+    onStartGame: startGame,
+  });
 
-  startRenderLoop(engine, scene, objects, logic, input, ws, zombieManager, ui, state, startGame);
+  startRenderLoop(
+    engine,
+    scene,
+    objects,
+    logic,
+    input,
+    ws,
+    zombieManager,
+    ui,
+    state,
+    startGame,
+  );
 
   window.addEventListener("resize", () => engine.resize());
 }

@@ -1,8 +1,8 @@
 import {
   ARENA_HEIGHT,
+  BALL_MAX_SPEED,
   BALL_SIZE,
   BALL_SPEED_INCREMENT,
-  BALL_MAX_SPEED,
   PADDLE_WIDTH,
   WALL_INSET,
 } from "../../../config";
@@ -39,7 +39,17 @@ export function checkPaddleCollision(
   paddleX: number,
   paddleHeight: number,
 ): boolean {
-  if (!aabbCollision(ball.x, ball.y, BALL_SIZE, paddleX, paddleY, PADDLE_WIDTH, paddleHeight)) {
+  if (
+    !aabbCollision(
+      ball.x,
+      ball.y,
+      BALL_SIZE,
+      paddleX,
+      paddleY,
+      PADDLE_WIDTH,
+      paddleHeight,
+    )
+  ) {
     return false;
   }
 
@@ -58,7 +68,11 @@ export function checkPaddleCollision(
   return true;
 }
 
-function applyPaddleBounce(ball: BallState, hitOffset: number, isRightPaddle: boolean): void {
+function applyPaddleBounce(
+  ball: BallState,
+  hitOffset: number,
+  isRightPaddle: boolean,
+): void {
   const currentSpeed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
   const speed = Math.min(currentSpeed, BALL_MAX_SPEED) + BALL_SPEED_INCREMENT;
   const angle = Math.max(-1, Math.min(1, hitOffset)) * (Math.PI / 4);
@@ -70,8 +84,13 @@ function applyPaddleBounce(ball: BallState, hitOffset: number, isRightPaddle: bo
 }
 
 function aabbCollision(
-  ax: number, ay: number, aSize: number,
-  bx: number, by: number, bWidth: number, bHeight: number,
+  ax: number,
+  ay: number,
+  aSize: number,
+  bx: number,
+  by: number,
+  bWidth: number,
+  bHeight: number,
 ): boolean {
   const aHalf = aSize / 2;
   const bHalfW = bWidth / 2;

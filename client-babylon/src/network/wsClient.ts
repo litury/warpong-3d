@@ -15,7 +15,12 @@ export class WsClient {
 
     ws.onopen = () => {
       this._connected = true;
-      this.send({ type: "Auth", signature: "dev", uniqueId: "local-player", name: "Player" });
+      this.send({
+        type: "Auth",
+        signature: "dev",
+        uniqueId: "local-player",
+        name: "Player",
+      });
       if (this._pendingJoin) {
         this.send({ type: "JoinQueue" });
         this._pendingJoin = false;

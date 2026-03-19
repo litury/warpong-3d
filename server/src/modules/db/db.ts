@@ -54,15 +54,29 @@ function rowToRecord(row: PlayerRow): PlayerRecord {
   };
 }
 
-const stmtGet = db.prepare<PlayerRow, [string]>("SELECT * FROM players WHERE id = ?");
-const stmtInsert = db.prepare("INSERT OR IGNORE INTO players (id, name) VALUES (?, ?)");
-const stmtUpdateCoins = db.prepare("UPDATE players SET coins = MAX(0, coins + ?) WHERE id = ?");
+const stmtGet = db.prepare<PlayerRow, [string]>(
+  "SELECT * FROM players WHERE id = ?",
+);
+const stmtInsert = db.prepare(
+  "INSERT OR IGNORE INTO players (id, name) VALUES (?, ?)",
+);
+const stmtUpdateCoins = db.prepare(
+  "UPDATE players SET coins = MAX(0, coins + ?) WHERE id = ?",
+);
 const stmtSetCoins = db.prepare("UPDATE players SET coins = ? WHERE id = ?");
 const stmtUpdateMmr = db.prepare("UPDATE players SET mmr = ? WHERE id = ?");
-const stmtUpdateStreak = db.prepare("UPDATE players SET win_streak = ?, total_online_wins = ? WHERE id = ?");
-const stmtUpdateUpgrades = db.prepare("UPDATE players SET upgrades_json = ?, coins = ? WHERE id = ?");
-const stmtUpdateCosmetics = db.prepare("UPDATE players SET paddle_color = ?, ball_trail = ? WHERE id = ?");
-const stmtLeaderboard = db.prepare<PlayerRow, [number]>("SELECT * FROM players ORDER BY mmr DESC LIMIT ?");
+const stmtUpdateStreak = db.prepare(
+  "UPDATE players SET win_streak = ?, total_online_wins = ? WHERE id = ?",
+);
+const stmtUpdateUpgrades = db.prepare(
+  "UPDATE players SET upgrades_json = ?, coins = ? WHERE id = ?",
+);
+const stmtUpdateCosmetics = db.prepare(
+  "UPDATE players SET paddle_color = ?, ball_trail = ? WHERE id = ?",
+);
+const stmtLeaderboard = db.prepare<PlayerRow, [number]>(
+  "SELECT * FROM players ORDER BY mmr DESC LIMIT ?",
+);
 
 export function getOrCreatePlayer(id: string, name?: string): PlayerRecord {
   stmtInsert.run(id, name ?? `Player_${id}`);
@@ -89,7 +103,11 @@ export function updateMmr(id: string, newMmr: number): void {
   stmtUpdateMmr.run(Math.max(0, newMmr), id);
 }
 
-export function updateStreak(id: string, winStreak: number, totalOnlineWins: number): void {
+export function updateStreak(
+  id: string,
+  winStreak: number,
+  totalOnlineWins: number,
+): void {
   stmtUpdateStreak.run(winStreak, totalOnlineWins, id);
 }
 
@@ -140,14 +158,29 @@ export function settleGame(
   coinsDelta: number,
   loseCoinsDelta: number,
 ): SettleGameResult {
-  return settleGameTx(winnerId, loserId, winnerMmr, loserMmr, coinsDelta, loseCoinsDelta);
+  return settleGameTx(
+    winnerId,
+    loserId,
+    winnerMmr,
+    loserMmr,
+    coinsDelta,
+    loseCoinsDelta,
+  );
 }
 
-export function updateUpgrades(id: string, upgrades: Record<string, number>, newCoins: number): void {
+export function updateUpgrades(
+  id: string,
+  upgrades: Record<string, number>,
+  newCoins: number,
+): void {
   stmtUpdateUpgrades.run(JSON.stringify(upgrades), Math.max(0, newCoins), id);
 }
 
-export function updateCosmetics(id: string, paddleColor: string | null, ballTrail: string | null): void {
+export function updateCosmetics(
+  id: string,
+  paddleColor: string | null,
+  ballTrail: string | null,
+): void {
   stmtUpdateCosmetics.run(paddleColor, ballTrail, id);
 }
 
