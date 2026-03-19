@@ -25,6 +25,8 @@ export interface PlayerData {
   upgrades: PlayerUpgrades | null;
   coins: number;
   mmr: number;
+  /** True while STAKE coins are reserved (in queue or in match) */
+  stakeReserved: boolean;
 }
 
 export const STAKE = 10;
@@ -170,20 +172,22 @@ export class GameSession {
 
     const elo = calcElo(winnerWs.data.mmr, loserWs.data.mmr);
 
-    // Persist to DB (atomic transaction)
+    // Stakes already deducted at queue join. Winner gets the pot; loser delta is 0.
     const settled = settleGame(
       winnerId,
       loserId,
       elo.winnerNew,
       elo.loserNew,
       winReward,
-      -STAKE,
+      0,
     );
 
     winnerWs.data.mmr = elo.winnerNew;
     loserWs.data.mmr = elo.loserNew;
     winnerWs.data.coins = settled.winnerCoins;
     loserWs.data.coins = settled.loserCoins;
+    winnerWs.data.stakeReserved = false;
+    loserWs.data.stakeReserved = false;
 
     return {
       winReward,

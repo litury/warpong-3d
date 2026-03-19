@@ -8,7 +8,7 @@ import {
   handleRewardCoins,
 } from "./handlers/purchase";
 import { validateMessage } from "./handlers/validate";
-import { getOrCreatePlayer, getPlayer } from "./modules/db";
+import { getOrCreatePlayer, getPlayer, reserveStake, releaseStake } from "./modules/db";
 import type { PlayerRecord } from "./modules/db";
 import type { PlayerData } from "./modules/gameSession";
 import { STAKE } from "./modules/gameSession";
@@ -153,23 +153,17 @@ Bun.serve<PlayerData>({
 
         case "JoinQueue": {
           const player = getPlayer(ws.data.playerId);
-          if (!player || player.coins < STAKE) {
-            ws.send(
-              JSON.stringify({
-                type: "PlayerSync",
-                coins: player?.coins ?? 0,
-                mmr: player?.mmr ?? 1000,
-                upgrades: player?.upgrades ?? {},
-                paddleColor: player?.paddleColor ?? null,
-                ballTrail: player?.ballTrail ?? null,
-                totalOnlineWins: player?.totalOnlineWins ?? 0,
-                winStreak: player?.winStreak ?? 0,
-              }),
-            );
+          if (!player) return;
+          // Atomically reserve STAKE coins so they can't be spent elsewhere
+          const reserved = reserveStake(ws.data.playerId, STAKE);
+          if (reserved === null) {
+            // Insufficient coins — sync actual balance back to client
+            sendPlayerSync(ws, player);
             return;
           }
-          ws.data.coins = player.coins;
+          ws.data.coins = reserved;
           ws.data.mmr = player.mmr;
+          ws.data.stakeReserved = true;
           ws.data.cosmetics = {
             paddleColor: player.paddleColor
               ? Number.parseInt(player.paddleColor, 16)
@@ -188,6 +182,12 @@ Bun.serve<PlayerData>({
 
         case "LeaveQueue":
           matchmaking.removeFromQueue(ws);
+          // Only refund if still in queue (not yet matched into a session)
+          if (ws.data.stakeReserved && !ws.data.sessionId) {
+            ws.data.stakeReserved = false;
+            const refunded = releaseStake(ws.data.playerId, STAKE);
+            ws.data.coins = refunded;
+          }
           break;
 
         case "PlayerInput": {
@@ -203,6 +203,10 @@ Bun.serve<PlayerData>({
         }
 
         case "BuyUpgrade":
+          if (ws.data.stakeReserved) {
+            ws.send(JSON.stringify({ type: "Error", message: "cannot buy upgrades during matchmaking" }));
+            break;
+          }
           handleBuyUpgrade(ws, msg, sendPlayerSync);
           break;
 
@@ -224,6 +228,11 @@ Bun.serve<PlayerData>({
       console.log(`Player disconnected: ${ws.data.playerId}`);
       connectedSockets.delete(ws);
       clearRewardCooldown(ws.data.playerId);
+      // Refund reserved stake if player was in queue (not yet in a match)
+      if (ws.data.stakeReserved && !ws.data.sessionId) {
+        ws.data.stakeReserved = false;
+        releaseStake(ws.data.playerId, STAKE);
+      }
       matchmaking.handleDisconnect(ws);
       broadcastOnlineCount();
     },
