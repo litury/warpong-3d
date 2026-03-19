@@ -2,6 +2,9 @@ import type { ClientMessage, ServerMessage } from "../shared/messages";
 
 const SERVER_URL = "ws://localhost:3030";
 
+// Unique ID per browser tab so two tabs can play against each other
+const LOCAL_PLAYER_ID = `player-${crypto.randomUUID()}`;
+
 export class WsClient {
   private ws: WebSocket | null = null;
   private _inbox: ServerMessage[] = [];
@@ -15,7 +18,7 @@ export class WsClient {
 
     ws.onopen = () => {
       this._connected = true;
-      this.send({ type: "Auth", signature: "dev", uniqueId: "local-player", name: "Player" });
+      this.send({ type: "Auth", signature: "dev", uniqueId: LOCAL_PLAYER_ID, name: "Player" });
       if (this._pendingJoin) {
         this.send({ type: "JoinQueue" });
         this._pendingJoin = false;
