@@ -20,6 +20,7 @@ async function main() {
   const input = new InputManager(canvas);
   const ws = new WsClient();
   const zombieManager = new ZombieManager(scene);
+  await zombieManager.init();
   const ui = new UIManager(queryUIElements(), updateScoreboard);
 
   ui.hideLoading();

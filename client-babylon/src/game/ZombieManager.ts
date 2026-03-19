@@ -1,4 +1,3 @@
-import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { Scene } from "@babylonjs/core/scene";
 import { Sprite } from "@babylonjs/core/Sprites/sprite";
 import { SpriteManager } from "@babylonjs/core/Sprites/spriteManager";
@@ -9,24 +8,26 @@ import {
   WALL_INSET,
 } from "../config/gameConfig";
 import {
-  LOD_DISTANCE,
-  disposeZombie,
-  hideZombie,
-  scaleZombieToHeight,
-  showZombie,
-  spawnZombie,
-  stopAllAnims,
-  switchToHiDetail,
-  switchToLod,
+  acquireInstance,
+  disposeAll,
+  flushBuffers,
+  freezeOnLastFrame,
+  getAnimDuration,
+  getGlobalTime,
+  initZombieInstances,
+  releaseInstance,
+  setAnimation,
+  setInstanceScale,
+  setTransform,
+  updateTime,
+  type ZombieThinHandle,
 } from "./ZombieLoader";
-import type { ZombieInstance } from "./ZombieLoader";
+import { SpatialGrid } from "./SpatialGrid";
 
-const ZOMBIE_SIZE = 30;
 const ZOMBIE_SPEED = 60;
 const SPAWN_INTERVAL = 3;
 const BALL_KILL_RADIUS = 25;
 const MAX_ZOMBIES = 40;
-const MAX_POOL = 15;
 const FIGHT_RADIUS = 20;
 const FIGHT_RADIUS_SQ = FIGHT_RADIUS * FIGHT_RADIUS;
 const FIGHT_DURATION = 2;
@@ -34,85 +35,13 @@ const BODY_LINGER = 5;
 const MAX_DECALS = 50;
 const DECAL_SIZE = 18;
 const SCREAM_DURATION = 0.5;
-
-const GRID_CELL = FIGHT_RADIUS; // cell size = fight radius so neighbours cover full range
-
-class SpatialGrid {
-  private cellInv: number;
-  private cells = new Map<number, Zombie[]>();
-
-  constructor(cellSize: number) {
-    this.cellInv = 1 / cellSize;
-  }
-
-  clear() {
-    this.cells.clear();
-  }
-
-  insert(z: Zombie) {
-    const key = this.key(z.x, z.z);
-    const bucket = this.cells.get(key);
-    if (bucket) {
-      bucket.push(z);
-    } else {
-      this.cells.set(key, [z]);
-    }
-  }
-
-  /** Iterate all pairs of (left, right) zombies in same or adjacent cells */
-  forEachFightPair(callback: (l: Zombie, r: Zombie) => boolean) {
-    for (const [key, bucket] of this.cells) {
-      // Check within the same cell
-      this.checkBucket(bucket, callback);
-      // Check 4 neighbours (right, below, below-left, below-right) to avoid duplicates
-      const cx = key & 0xFFFF;
-      const cz = (key >> 16) & 0xFFFF;
-      for (const [dx, dz] of [[1, 0], [0, 1], [1, 1], [-1, 1]] as const) {
-        const nk = ((cz + dz) & 0xFFFF) << 16 | ((cx + dx) & 0xFFFF);
-        const neighbour = this.cells.get(nk);
-        if (neighbour) this.checkCross(bucket, neighbour, callback);
-      }
-    }
-  }
-
-  private checkBucket(bucket: Zombie[], cb: (l: Zombie, r: Zombie) => boolean) {
-    for (let i = 0; i < bucket.length; i++) {
-      for (let j = i + 1; j < bucket.length; j++) {
-        const a = bucket[i], b = bucket[j];
-        if (a.side === b.side) continue;
-        const [l, r] = a.side === "left" ? [a, b] : [b, a];
-        if (cb(l, r)) return;
-      }
-    }
-  }
-
-  private checkCross(a: Zombie[], b: Zombie[], cb: (l: Zombie, r: Zombie) => boolean) {
-    for (const za of a) {
-      for (const zb of b) {
-        if (za.side === zb.side) continue;
-        const [l, r] = za.side === "left" ? [za, zb] : [zb, za];
-        if (cb(l, r)) return;
-      }
-    }
-  }
-
-  private key(x: number, z: number): number {
-    const cx = ((x * this.cellInv) | 0) & 0xFFFF;
-    const cz = ((z * this.cellInv) | 0) & 0xFFFF;
-    return (cz << 16) | cx;
-  }
-}
+const GRID_CELL = FIGHT_RADIUS * 2;
 
 export type ZombieSide = "left" | "right";
 type ZombieState = "spawning" | "walking" | "fighting" | "dying";
 
-/** Pick the correct animation based on current LOD state */
-function pickAnim(inst: ZombieInstance, hiKey: keyof ZombieInstance, lodKey: keyof ZombieInstance) {
-  return (inst.isLod ? inst[lodKey] : inst[hiKey]) as import("@babylonjs/core/Animations/animationGroup").AnimationGroup;
-}
-
 export interface Zombie {
-  instance: ZombieInstance;
+  handle: ZombieThinHandle;
   x: number;
   z: number;
   side: ZombieSide;
@@ -124,6 +53,8 @@ export interface Zombie {
   useAltWalk: boolean;
   useAltAttack: boolean;
   useAltDeath: boolean;
+  rotY: number;
+  currentAnim: string;
 }
 
 export class ZombieManager {
@@ -132,10 +63,10 @@ export class ZombieManager {
   private spawnTimer = 0;
   private waveNumber = 0;
   private scene: Scene;
-  private pool: ZombieInstance[] = [];
   private decalSprites: Sprite[] = [];
   private decalManager: SpriteManager | null = null;
   private fightGrid = new SpatialGrid(GRID_CELL);
+  private initialized = false;
 
   onZombieReachedMech?: (side: ZombieSide) => void;
   onZombieKilled?: () => void;
@@ -144,11 +75,20 @@ export class ZombieManager {
     this.scene = scene;
   }
 
-  async update(dt: number) {
+  async init(): Promise<void> {
+    await initZombieInstances(this.scene);
+    this.initialized = true;
+  }
+
+  update(dt: number) {
+    if (!this.initialized) return;
+
+    updateTime(dt);
+
     this.spawnTimer += dt;
     if (this.spawnTimer >= SPAWN_INTERVAL) {
       this.spawnTimer = 0;
-      await this.spawnWave();
+      this.spawnWave();
     }
 
     const mechLeftX = -ARENA_WIDTH / 2 + PADDLE_MARGIN;
@@ -160,11 +100,9 @@ export class ZombieManager {
       z.spawnTimer += dt;
       if (z.spawnTimer >= SCREAM_DURATION) {
         z.state = "walking";
-        stopAllAnims(z.instance);
-        const walkAnim = z.useAltWalk
-          ? pickAnim(z.instance, "injuredWalkAnim", "lodInjuredWalkAnim")
-          : pickAnim(z.instance, "monsterWalkAnim", "lodMonsterWalkAnim");
-        walkAnim.start(true);
+        const walkAnim = z.useAltWalk ? "injured_walk" : "monster_walk";
+        z.currentAnim = walkAnim;
+        setAnimation(z.handle, walkAnim, true, getGlobalTime());
       }
     }
 
@@ -174,22 +112,21 @@ export class ZombieManager {
 
       if (z.side === "left") {
         z.x += ZOMBIE_SPEED * dt;
-        z.instance.root.rotation.y = Math.PI;
+        z.rotY = Math.PI;
         if (z.x >= mechRightX) {
           this.startDying(z);
           this.onZombieReachedMech?.("left");
         }
       } else {
         z.x -= ZOMBIE_SPEED * dt;
-        z.instance.root.rotation.y = 0;
+        z.rotY = 0;
         if (z.x <= mechLeftX) {
           this.startDying(z);
           this.onZombieReachedMech?.("right");
         }
       }
 
-      z.instance.root.position.x = z.x;
-      z.instance.root.position.z = z.z;
+      setTransform(z.handle, z.x, 0, z.z, z.rotY, 1);
     }
 
     // Check fights between opposite-side zombies
@@ -207,26 +144,29 @@ export class ZombieManager {
       }
     }
 
-    // Update dying zombies (fade out)
+    // Update dying zombies (shrink instead of fade)
     for (const z of this.zombies) {
       if (z.state !== "dying") continue;
       z.deathTimer += dt;
 
-      // Fade out meshes in last 2 seconds
+      // Check if non-looping death animation finished → freeze on last frame
+      const deathAnimName = z.useAltDeath ? "dying_backwards" : "dead";
+      const animDuration = getAnimDuration(deathAnimName);
+      if (z.deathTimer >= animDuration && z.currentAnim === deathAnimName) {
+        freezeOnLastFrame(z.handle, deathAnimName);
+        z.currentAnim = ""; // mark as frozen
+      }
+
+      // Shrink in last 2 seconds of linger
       if (z.deathTimer > BODY_LINGER - 2) {
         const fadeT = (z.deathTimer - (BODY_LINGER - 2)) / 2;
-        const alpha = Math.max(0, 1 - fadeT);
-        const activeMeshes = z.instance.isLod ? z.instance.lodMeshes : z.instance.meshes;
-        for (const mesh of activeMeshes) {
-          mesh.visibility = alpha;
-        }
+        const scale = Math.max(0, 1 - fadeT);
+        setInstanceScale(z.handle, scale);
       }
     }
 
-    // LOD: switch mesh detail based on camera distance
-    this.updateLod();
-
     this.cleanupDead();
+    flushBuffers();
   }
 
   checkBallCollisions(ballX: number, ballZ: number): number {
@@ -267,18 +207,19 @@ export class ZombieManager {
         r.fightTimer = 0;
         l.fightPartner = r;
         r.fightPartner = l;
-        l.instance.root.rotation.y = Math.PI;
-        r.instance.root.rotation.y = 0;
-        stopAllAnims(l.instance);
-        stopAllAnims(r.instance);
-        const lAnim = l.useAltAttack
-          ? pickAnim(l.instance, "punchComboAnim", "lodPunchComboAnim")
-          : pickAnim(l.instance, "attackAnim", "lodAttackAnim");
-        const rAnim = r.useAltAttack
-          ? pickAnim(r.instance, "punchComboAnim", "lodPunchComboAnim")
-          : pickAnim(r.instance, "attackAnim", "lodAttackAnim");
-        lAnim.start(true);
-        rAnim.start(true);
+        // Face each other
+        l.rotY = Math.PI;
+        r.rotY = 0;
+        setTransform(l.handle, l.x, 0, l.z, l.rotY, 1);
+        setTransform(r.handle, r.x, 0, r.z, r.rotY, 1);
+        // Play attack animations
+        const lAnimName = l.useAltAttack ? "punch_combo" : "attack";
+        const rAnimName = r.useAltAttack ? "punch_combo" : "attack";
+        const time = getGlobalTime();
+        l.currentAnim = lAnimName;
+        r.currentAnim = rAnimName;
+        setAnimation(l.handle, lAnimName, true, time);
+        setAnimation(r.handle, rAnimName, true, time);
       }
       return false;
     });
@@ -288,11 +229,9 @@ export class ZombieManager {
     if (z.state === "dying") return;
     z.state = "dying";
     z.deathTimer = 0;
-    stopAllAnims(z.instance);
-    const deathAnim = z.useAltDeath
-      ? pickAnim(z.instance, "dyingBackwardsAnim", "lodDyingBackwardsAnim")
-      : pickAnim(z.instance, "dieAnim", "lodDieAnim");
-    deathAnim.start(false);
+    const deathAnim = z.useAltDeath ? "dying_backwards" : "dead";
+    z.currentAnim = deathAnim;
+    setAnimation(z.handle, deathAnim, false, getGlobalTime());
     this.spawnDecal(z.x, z.z);
   }
 
@@ -326,7 +265,7 @@ export class ZombieManager {
     this.decalSprites.push(sprite);
   }
 
-  private async spawnWave() {
+  private spawnWave() {
     this.waveNumber++;
     const count = this.waveNumber;
     const bound = ARENA_HEIGHT / 2 - WALL_INSET;
@@ -338,60 +277,32 @@ export class ZombieManager {
     const slotsLeft = MAX_ZOMBIES - activeCount;
     const toSpawn = Math.min(count, slotsLeft);
 
-    const promises: Promise<void>[] = [];
     for (let i = 0; i < toSpawn; i++) {
       const side: ZombieSide = i % 2 === 0 ? "left" : "right";
-      const spawnX =
-        side === "left"
-          ? -ARENA_WIDTH / 2 + PADDLE_MARGIN + 40
-          : ARENA_WIDTH / 2 - PADDLE_MARGIN - 40;
+      const spawnX = side === "left"
+        ? -ARENA_WIDTH / 2 + PADDLE_MARGIN + 40
+        : ARENA_WIDTH / 2 - PADDLE_MARGIN - 40;
       const spawnZ = (Math.random() - 0.5) * bound * 2;
-      promises.push(this.spawnOne(side, spawnX, spawnZ));
+      this.spawnOne(side, spawnX, spawnZ);
     }
-    await Promise.all(promises);
   }
 
-  private async spawnOne(side: ZombieSide, x: number, z: number) {
-    let instance: ZombieInstance;
+  private spawnOne(side: ZombieSide, x: number, z: number) {
+    const handle = acquireInstance();
+    if (!handle) return; // no slots available
 
-    if (this.pool.length > 0) {
-      instance = this.pool.pop()!;
-      showZombie(instance);
-      instance.root.rotation.set(0, 0, 0);
-      instance.root.position.set(0, 0, 0);
-      for (const mesh of instance.meshes) mesh.visibility = 1;
-    } else {
-      instance = await spawnZombie(this.scene);
-      scaleZombieToHeight(instance, ZOMBIE_SIZE);
-      for (const mesh of instance.meshes) {
-        if (mesh.material) mesh.material.freeze();
-      }
-      for (const mesh of instance.lodMeshes) {
-        if (mesh.material) mesh.material.freeze();
-      }
-    }
+    const rotY = side === "left" ? Math.PI : 0;
+    setTransform(handle, x, 0, z, rotY, 1);
 
-    instance.root.position.x = x;
-    instance.root.position.z = z;
-    instance.root.position.y = 0;
+    const time = getGlobalTime();
+    setAnimation(handle, "zombie_scream", false, time);
 
-    // Randomize animation variants
     const useAltWalk = Math.random() < 0.2;
     const useAltAttack = Math.random() < 0.5;
     const useAltDeath = Math.random() < 0.5;
 
-    // Start with scream animation (always hi-detail since freshly spawned/recycled)
-    stopAllAnims(instance);
-    instance.screamAnim.start(false);
-
-    // Face the direction of movement
-    instance.root.rotation.y = side === "left" ? Math.PI : 0;
-
     this.zombies.push({
-      instance,
-      x,
-      z,
-      side,
+      handle, x, z, side,
       state: "spawning",
       fightTimer: 0,
       deathTimer: 0,
@@ -400,25 +311,9 @@ export class ZombieManager {
       useAltWalk,
       useAltAttack,
       useAltDeath,
+      rotY,
+      currentAnim: "zombie_scream",
     });
-  }
-
-  private updateLod() {
-    const cam = this.scene.activeCamera;
-    if (!cam) return;
-    const camPos = cam.position;
-    const tmpVec = Vector3.Zero();
-
-    for (const z of this.zombies) {
-      if (z.state === "dying") continue; // don't LOD-switch dying zombies mid-animation
-      tmpVec.set(z.x, 0, z.z);
-      const dist = Vector3.Distance(camPos, tmpVec);
-      if (dist > LOD_DISTANCE && !z.instance.isLod) {
-        switchToLod(z.instance);
-      } else if (dist <= LOD_DISTANCE && z.instance.isLod) {
-        switchToHiDetail(z.instance);
-      }
-    }
   }
 
   private cleanupDead() {
@@ -426,18 +321,7 @@ export class ZombieManager {
     for (let read = 0; read < this.zombies.length; read++) {
       const z = this.zombies[read];
       if (z.state === "dying" && z.deathTimer >= BODY_LINGER) {
-        hideZombie(z.instance);
-        z.instance.root.rotation.set(0, 0, 0);
-        // Reset visibility on both mesh sets
-        for (const mesh of z.instance.meshes) mesh.visibility = 1;
-        for (const mesh of z.instance.lodMeshes) mesh.visibility = 1;
-        // Reset to hi-detail for next reuse
-        z.instance.isLod = false;
-        if (this.pool.length < MAX_POOL) {
-          this.pool.push(z.instance);
-        } else {
-          disposeZombie(z.instance);
-        }
+        releaseInstance(z.handle);
       } else {
         this.zombies[write++] = z;
       }
@@ -447,14 +331,10 @@ export class ZombieManager {
 
   dispose() {
     for (const z of this.zombies) {
-      hideZombie(z.instance);
+      releaseInstance(z.handle);
     }
     this.zombies = [];
-    this.pool = [];
-    if (this.decalManager) {
-      this.decalManager.dispose();
-      this.decalManager = null;
-    }
+    for (const d of this.decalSprites) d.dispose();
     this.decalSprites = [];
   }
 
