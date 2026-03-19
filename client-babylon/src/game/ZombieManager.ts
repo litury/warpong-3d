@@ -1,24 +1,26 @@
 import { Scene } from "@babylonjs/core/scene";
+import { ShadowGenerator } from "@babylonjs/core/Lights/Shadows/shadowGenerator";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { Texture } from "@babylonjs/core/Materials/Textures/texture";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { ARENA_WIDTH, ARENA_HEIGHT, PADDLE_MARGIN, WALL_INSET } from "../config/gameConfig";
-import { spawnZombie, scaleZombieToHeight, hideZombie, showZombie, disposeZombie, stopAllAnims } from "./ZombieLoader";
+import { spawnZombie, scaleZombieToHeight, disposeZombieAnimsOnly, stopAllAnims } from "./ZombieLoader";
 import type { ZombieInstance } from "./ZombieLoader";
+import type { AnimationGroup } from "@babylonjs/core/Animations/animationGroup";
 
 const ZOMBIE_SIZE = 30;
-const ZOMBIE_SPEED = 60;
-const SPAWN_INTERVAL = 3;
+const SPAWN_INTERVAL = 2;
 const BALL_KILL_RADIUS = 25;
 const MAX_ZOMBIES = 40;
-const MAX_POOL = 15;
 const FIGHT_RADIUS = 20;
-const FIGHT_DURATION = 2;
-const BODY_LINGER = 5;
-const MAX_DECALS = 50;
+const FIGHT_HIT_INTERVAL = 0.8;
+const ZOMBIE_HP = 3;
+const DEATH_ANIM_DURATION = 2.5;
+const MAX_CORPSES = 15;
 const DECAL_SIZE = 18;
 const SCREAM_DURATION = 0.5;
+const ZOMBIE_SPEED = 22;
 
 export type ZombieSide = "left" | "right";
 type ZombieState = "spawning" | "walking" | "fighting" | "dying";
@@ -33,9 +35,19 @@ export interface Zombie {
   deathTimer: number;
   spawnTimer: number;
   fightPartner: Zombie | null;
-  useAltWalk: boolean;
-  useAltAttack: boolean;
-  useAltDeath: boolean;
+  walkVariant: number;    // 0=walk, 1=monsterWalk, 2=injuredWalk
+  attackVariant: number;  // 0=attack, 1=punchCombo
+  deathVariant: number;   // 0=die, 1=dyingBackwards
+  activeWalkAnim: AnimationGroup | null;
+  decalMesh: Mesh | null;
+  speed: number;
+  animSpeed: number;
+  hp: number;
+}
+
+interface Corpse {
+  mesh: Mesh;
+  decal: Mesh | null;
 }
 
 export class ZombieManager {
@@ -44,15 +56,16 @@ export class ZombieManager {
   private spawnTimer = 0;
   private waveNumber = 0;
   private scene: Scene;
-  private pool: ZombieInstance[] = [];
-  private decals: Mesh[] = [];
+  private shadowGen: ShadowGenerator;
+  private corpses: Corpse[] = [];
   private decalMat: StandardMaterial | null = null;
 
   onZombieReachedMech?: (side: ZombieSide) => void;
   onZombieKilled?: () => void;
 
-  constructor(scene: Scene) {
+  constructor(scene: Scene, shadowGen: ShadowGenerator) {
     this.scene = scene;
+    this.shadowGen = shadowGen;
   }
 
   async update(dt: number) {
@@ -72,72 +85,79 @@ export class ZombieManager {
       if (z.spawnTimer >= SCREAM_DURATION) {
         z.state = "walking";
         stopAllAnims(z.instance);
-        const walkAnim = z.useAltWalk ? z.instance.injuredWalkAnim : z.instance.monsterWalkAnim;
+        const walkAnim = z.walkVariant === 0 ? z.instance.walkAnim : z.walkVariant === 1 ? z.instance.monsterWalkAnim : z.instance.injuredWalkAnim;
         walkAnim.start(true);
+        walkAnim.goToFrame(Math.random() * walkAnim.to);
+        walkAnim.speedRatio = z.animSpeed;
+        z.activeWalkAnim = walkAnim;
       }
     }
 
-    // Move walking zombies
+    // Move walking zombies at constant speed
     for (const z of this.zombies) {
       if (z.state !== "walking") continue;
 
       if (z.side === "left") {
-        z.x += ZOMBIE_SPEED * dt;
-        z.instance.root.rotation.y = Math.PI;
-        if (z.x >= mechRightX) {
-          this.startDying(z);
-          this.onZombieReachedMech?.("left");
-        }
+        z.x += z.speed * dt;
       } else {
-        z.x -= ZOMBIE_SPEED * dt;
-        z.instance.root.rotation.y = 0;
-        if (z.x <= mechLeftX) {
-          this.startDying(z);
-          this.onZombieReachedMech?.("right");
-        }
+        z.x -= z.speed * dt;
       }
 
+      z.instance.root.rotation.y = z.side === "left" ? Math.PI / 2 : -Math.PI / 2;
       z.instance.root.position.x = z.x;
       z.instance.root.position.z = z.z;
+
+      if (z.side === "left" && z.x >= mechRightX) {
+        this.startDying(z);
+        this.onZombieReachedMech?.("left");
+      } else if (z.side === "right" && z.x <= mechLeftX) {
+        this.startDying(z);
+        this.onZombieReachedMech?.("right");
+      }
     }
 
     // Check fights between opposite-side zombies
     this.checkFights();
 
-    // Update fighting zombies
+    // Update fighting zombies — HP-based combat, winner continues walking
     for (const z of this.zombies) {
       if (z.state !== "fighting") continue;
       z.fightTimer += dt;
-      if (z.fightTimer >= FIGHT_DURATION) {
-        this.killZombie(z);
+      if (z.fightTimer >= FIGHT_HIT_INTERVAL) {
+        z.fightTimer = 0;
         if (z.fightPartner && z.fightPartner.state === "fighting") {
-          this.killZombie(z.fightPartner);
+          z.fightPartner.hp--;
+          if (z.fightPartner.hp <= 0) {
+            const loser = z.fightPartner;
+            this.killZombie(loser);
+            // Winner resumes walking
+            z.state = "walking";
+            z.fightPartner = null;
+            stopAllAnims(z.instance);
+            const walkAnim = z.walkVariant === 0 ? z.instance.walkAnim : z.walkVariant === 1 ? z.instance.monsterWalkAnim : z.instance.injuredWalkAnim;
+            walkAnim.start(true);
+            walkAnim.speedRatio = z.animSpeed;
+            z.activeWalkAnim = walkAnim;
+            z.instance.root.rotation.y = z.side === "left" ? Math.PI / 2 : -Math.PI / 2;
+          }
         }
       }
     }
 
-    // Update dying zombies (fade out)
+    // Update dying zombies — wait for death anim then freeze as corpse
     for (const z of this.zombies) {
       if (z.state !== "dying") continue;
       z.deathTimer += dt;
-
-      // Fade out meshes in last 2 seconds
-      if (z.deathTimer > BODY_LINGER - 2) {
-        const fadeT = (z.deathTimer - (BODY_LINGER - 2)) / 2;
-        const alpha = Math.max(0, 1 - fadeT);
-        for (const mesh of z.instance.meshes) {
-          mesh.visibility = alpha;
-        }
-      }
     }
 
     this.cleanupDead();
   }
 
-  checkBallCollisions(ballX: number, ballZ: number): number {
+  checkBallCollisions(ballX: number, ballZ: number, lastHitBy: "left" | "right"): number {
     let kills = 0;
     for (const z of this.zombies) {
       if (z.state !== "walking" && z.state !== "fighting") continue;
+      if (z.side === lastHitBy) continue; // don't kill your own zombies
       const dx = z.x - ballX;
       const dz = z.z - ballZ;
       const dist = Math.sqrt(dx * dx + dz * dz);
@@ -170,15 +190,17 @@ export class ZombieManager {
           l.fightPartner = r;
           r.fightPartner = l;
           // Face each other
-          l.instance.root.rotation.y = Math.PI;
-          r.instance.root.rotation.y = 0;
+          l.instance.root.rotation.y = Math.PI / 2;
+          r.instance.root.rotation.y = -Math.PI / 2;
           // Play attack animations
           stopAllAnims(l.instance);
           stopAllAnims(r.instance);
-          const lAnim = l.useAltAttack ? l.instance.punchComboAnim : l.instance.attackAnim;
-          const rAnim = r.useAltAttack ? r.instance.punchComboAnim : r.instance.attackAnim;
+          const lAnim = l.attackVariant === 0 ? l.instance.attackAnim : l.instance.punchComboAnim;
+          const rAnim = r.attackVariant === 0 ? r.instance.attackAnim : r.instance.punchComboAnim;
           lAnim.start(true);
+          lAnim.speedRatio = l.animSpeed;
           rAnim.start(true);
+          rAnim.speedRatio = r.animSpeed;
           break;
         }
       }
@@ -190,16 +212,16 @@ export class ZombieManager {
     z.state = "dying";
     z.deathTimer = 0;
     stopAllAnims(z.instance);
-    const deathAnim = z.useAltDeath ? z.instance.dyingBackwardsAnim : z.instance.dieAnim;
+    const deathAnim = z.deathVariant === 0 ? z.instance.dieAnim : z.instance.dyingBackwardsAnim;
     deathAnim.start(false);
-    this.spawnDecal(z.x, z.z);
+    z.decalMesh = this.spawnDecal(z.x, z.z);
   }
 
   private killZombie(z: Zombie) {
     this.startDying(z);
   }
 
-  private spawnDecal(x: number, z: number) {
+  private spawnDecal(x: number, z: number): Mesh {
     if (!this.decalMat) {
       this.decalMat = new StandardMaterial("bloodMat", this.scene);
       this.decalMat.diffuseTexture = new Texture("/assets/blood_decal.png", this.scene);
@@ -211,23 +233,18 @@ export class ZombieManager {
       this.decalMat.freeze();
     }
 
-    if (this.decals.length >= MAX_DECALS) {
-      const old = this.decals.shift()!;
-      old.dispose();
-    }
-
     const decal = MeshBuilder.CreateGround("blood", { width: DECAL_SIZE, height: DECAL_SIZE }, this.scene);
     decal.position.set(x, 0.05, z);
     decal.rotation.y = Math.random() * Math.PI * 2;
     decal.material = this.decalMat;
     decal.freezeWorldMatrix();
-    this.decals.push(decal);
+    return decal;
   }
 
   private async spawnWave() {
     this.waveNumber++;
     const count = this.waveNumber;
-    const bound = ARENA_HEIGHT / 2 - WALL_INSET;
+    const bound = ARENA_HEIGHT / 2 - WALL_INSET - ZOMBIE_SIZE;
 
     const activeCount = this.zombies.filter(z => z.state !== "dying").length;
     const slotsLeft = MAX_ZOMBIES - activeCount;
@@ -246,37 +263,31 @@ export class ZombieManager {
   }
 
   private async spawnOne(side: ZombieSide, x: number, z: number) {
-    let instance: ZombieInstance;
-
-    if (this.pool.length > 0) {
-      instance = this.pool.pop()!;
-      showZombie(instance);
-      instance.root.rotation.set(0, 0, 0);
-      instance.root.position.set(0, 0, 0);
-      for (const mesh of instance.meshes) mesh.visibility = 1;
-    } else {
-      instance = await spawnZombie(this.scene);
-      scaleZombieToHeight(instance, ZOMBIE_SIZE);
-      for (const mesh of instance.meshes) {
-        if (mesh.material) mesh.material.freeze();
-      }
-    }
-
+    const instance = await spawnZombie(this.scene, side);
+    // Slight size variation (±10%) for visual diversity
+    const sizeVariation = 0.9 + Math.random() * 0.2;
+    scaleZombieToHeight(instance, ZOMBIE_SIZE * sizeVariation);
     instance.root.position.x = x;
     instance.root.position.z = z;
     instance.root.position.y = 0;
 
-    // Randomize animation variants
-    const useAltWalk = Math.random() < 0.2;
-    const useAltAttack = Math.random() < 0.5;
-    const useAltDeath = Math.random() < 0.5;
+    // Randomize animation variants (equal distribution across all variants)
+    const walkVariant = Math.floor(Math.random() * 3);    // 0,1,2
+    const attackVariant = Math.floor(Math.random() * 2);   // 0,1
+    const deathVariant = Math.floor(Math.random() * 2);    // 0,1
 
-    // Start with scream animation
+    // Random speed variation (0.6x–1.3x) — slow zombies lag behind, fast ones rush
+    const speedVariation = 0.6 + Math.random() * 0.7;
+    const speed = ZOMBIE_SPEED * speedVariation;
+    const animSpeed = speedVariation;
+
+    // Start with scream animation at random offset
     stopAllAnims(instance);
     instance.screamAnim.start(false);
+    instance.screamAnim.goToFrame(Math.random() * instance.screamAnim.to);
 
     // Face the direction of movement
-    instance.root.rotation.y = side === "left" ? Math.PI : 0;
+    instance.root.rotation.y = side === "left" ? Math.PI / 2 : -Math.PI / 2;
 
     this.zombies.push({
       instance, x, z, side,
@@ -285,40 +296,85 @@ export class ZombieManager {
       deathTimer: 0,
       spawnTimer: 0,
       fightPartner: null,
-      useAltWalk,
-      useAltAttack,
-      useAltDeath,
+      walkVariant,
+      attackVariant,
+      deathVariant,
+      activeWalkAnim: null,
+      decalMesh: null,
+      speed,
+      animSpeed,
+      hp: ZOMBIE_HP,
     });
   }
 
   private cleanupDead() {
-    const toRecycle: Zombie[] = [];
+    const ready: Zombie[] = [];
     for (const z of this.zombies) {
-      if (z.state === "dying" && z.deathTimer >= BODY_LINGER) {
-        toRecycle.push(z);
+      if (z.state === "dying" && z.deathTimer >= DEATH_ANIM_DURATION) {
+        ready.push(z);
       }
     }
-    for (const z of toRecycle) {
-      hideZombie(z.instance);
-      z.instance.root.rotation.set(0, 0, 0);
-      for (const mesh of z.instance.meshes) mesh.visibility = 1;
-      if (this.pool.length < MAX_POOL) {
-        this.pool.push(z.instance);
-      } else {
-        disposeZombie(z.instance);
+    for (const z of ready) {
+      // Stop animations so current pose is baked into mesh vertices
+      stopAllAnims(z.instance);
+
+      // Slight random rotation so corpses don't all look identical
+      z.instance.root.rotation.y += (Math.random() - 0.5) * 0.3;
+
+      // Remove from shadow casters before merge
+      for (const mesh of z.instance.meshes) {
+        this.shadowGen.removeShadowCaster(mesh);
+      }
+
+      // Freeze zombie as static corpse mesh
+      let corpse: Mesh | null = null;
+      if (z.instance.meshes.length === 1) {
+        // Single skinned mesh — detach from skeleton and hierarchy, use directly
+        corpse = z.instance.meshes[0];
+        corpse.skeleton = null;
+        corpse.parent = null;
+      } else if (z.instance.meshes.length > 1) {
+        corpse = Mesh.MergeMeshes(
+          z.instance.meshes,
+          true,      // disposeSource
+          true,      // allow32BitsIndices
+          undefined, // parent
+          false,     // multiMaterial
+          true,      // subdivideWithSubMeshes
+        );
+      }
+
+      if (corpse) {
+        corpse.isPickable = false;
+        corpse.freezeWorldMatrix();
+        this.corpses.push({ mesh: corpse, decal: z.decalMesh });
+      }
+
+      // Dispose skeleton, animations, transform nodes (meshes already consumed above)
+      disposeZombieAnimsOnly(z.instance);
+
+      // FIFO: remove oldest corpse if over limit
+      if (this.corpses.length > MAX_CORPSES) {
+        const old = this.corpses.shift()!;
+        old.mesh.dispose();
+        if (old.decal) old.decal.dispose();
       }
     }
-    this.zombies = this.zombies.filter(z => !(z.state === "dying" && z.deathTimer >= BODY_LINGER));
+    this.zombies = this.zombies.filter(z => !(z.state === "dying" && z.deathTimer >= DEATH_ANIM_DURATION));
   }
 
   dispose() {
     for (const z of this.zombies) {
-      hideZombie(z.instance);
+      for (const mesh of z.instance.meshes) this.shadowGen.removeShadowCaster(mesh);
+      disposeZombieAnimsOnly(z.instance);
+      if (z.decalMesh) z.decalMesh.dispose();
     }
     this.zombies = [];
-    this.pool = [];
-    for (const d of this.decals) d.dispose();
-    this.decals = [];
+    for (const c of this.corpses) {
+      c.mesh.dispose();
+      if (c.decal) c.decal.dispose();
+    }
+    this.corpses = [];
   }
 
   restart() {
