@@ -221,6 +221,14 @@ Bun.serve<PlayerData>({
         case "PurchaseCoins":
           handlePurchaseCoins(ws, msg, sendPlayerSync);
           break;
+
+        case "Reconnect": {
+          const ok = matchmaking.tryReconnect(ws, msg.sessionToken);
+          if (!ok) {
+            ws.send(JSON.stringify({ type: "Error", message: "reconnect failed" }));
+          }
+          break;
+        }
       }
     },
 

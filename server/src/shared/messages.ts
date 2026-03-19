@@ -33,7 +33,8 @@ export type ClientMessage =
       itemId: string | null;
     }
   | { type: "RewardCoins"; amount: number }
-  | { type: "PurchaseCoins"; productId: string };
+  | { type: "PurchaseCoins"; productId: string }
+  | { type: "Reconnect"; sessionToken: string };
 
 export type PaddleDirection = "Up" | "Down" | "Idle";
 
@@ -59,6 +60,7 @@ export type ServerMessage =
       stake: number;
       mmr: number;
       opponentMmr: number;
+      sessionToken: string;
     }
   | {
       type: "GameStateUpdate";
@@ -77,6 +79,8 @@ export type ServerMessage =
       coins: number;
     }
   | { type: "OpponentDisconnected"; reward: number; coins: number }
+  | { type: "GamePaused"; reason: "opponent_disconnected"; secondsLeft: number }
+  | { type: "GameResumed" }
   | { type: "OnlineCount"; count: number }
   | { type: "OpponentChat"; chatId: QuickChatId }
   | { type: "Error"; message: string };

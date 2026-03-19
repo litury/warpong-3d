@@ -65,8 +65,18 @@ export class UIManager {
   }
 
   showGameOver(text: string) {
+    this.ui.status.style.display = "none";
     this.ui.resultText.textContent = text;
     this.ui.gameOver.style.display = "block";
+  }
+
+  showPaused(secondsLeft: number) {
+    this.ui.status.style.display = "block";
+    this.ui.status.textContent = `Opponent reconnecting... ${secondsLeft}s`;
+  }
+
+  hidePaused() {
+    this.ui.status.style.display = "none";
   }
 
   hideGameOver() {

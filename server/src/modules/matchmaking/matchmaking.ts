@@ -31,6 +31,16 @@ export class Matchmaking {
     }
   }
 
+  tryReconnect(ws: ServerWebSocket<PlayerData>, sessionToken: string): boolean {
+    const sessionId = this.playerSession.get(ws.data.playerId);
+    if (!sessionId) return false;
+
+    const session = this.sessions.get(sessionId);
+    if (!session || !session.isPaused) return false;
+
+    return session.handleReconnect(ws.data.playerId, sessionToken, ws);
+  }
+
   getSessionForPlayer(playerId: string): GameSession | undefined {
     const sessionId = this.playerSession.get(playerId);
     if (!sessionId) return undefined;
