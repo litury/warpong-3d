@@ -1,3 +1,4 @@
+import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { Scene } from "@babylonjs/core/scene";
 import { Sprite } from "@babylonjs/core/Sprites/sprite";
 import { SpriteManager } from "@babylonjs/core/Sprites/spriteManager";
@@ -8,12 +9,15 @@ import {
   WALL_INSET,
 } from "../config/gameConfig";
 import {
+  LOD_DISTANCE,
   disposeZombie,
   hideZombie,
   scaleZombieToHeight,
   showZombie,
   spawnZombie,
   stopAllAnims,
+  switchToHiDetail,
+  switchToLod,
 } from "./ZombieLoader";
 import type { ZombieInstance } from "./ZombieLoader";
 
@@ -102,6 +106,11 @@ class SpatialGrid {
 export type ZombieSide = "left" | "right";
 type ZombieState = "spawning" | "walking" | "fighting" | "dying";
 
+/** Pick the correct animation based on current LOD state */
+function pickAnim(inst: ZombieInstance, hiKey: keyof ZombieInstance, lodKey: keyof ZombieInstance) {
+  return (inst.isLod ? inst[lodKey] : inst[hiKey]) as import("@babylonjs/core/Animations/animationGroup").AnimationGroup;
+}
+
 export interface Zombie {
   instance: ZombieInstance;
   x: number;
@@ -153,8 +162,8 @@ export class ZombieManager {
         z.state = "walking";
         stopAllAnims(z.instance);
         const walkAnim = z.useAltWalk
-          ? z.instance.injuredWalkAnim
-          : z.instance.monsterWalkAnim;
+          ? pickAnim(z.instance, "injuredWalkAnim", "lodInjuredWalkAnim")
+          : pickAnim(z.instance, "monsterWalkAnim", "lodMonsterWalkAnim");
         walkAnim.start(true);
       }
     }
@@ -207,11 +216,15 @@ export class ZombieManager {
       if (z.deathTimer > BODY_LINGER - 2) {
         const fadeT = (z.deathTimer - (BODY_LINGER - 2)) / 2;
         const alpha = Math.max(0, 1 - fadeT);
-        for (const mesh of z.instance.meshes) {
+        const activeMeshes = z.instance.isLod ? z.instance.lodMeshes : z.instance.meshes;
+        for (const mesh of activeMeshes) {
           mesh.visibility = alpha;
         }
       }
     }
+
+    // LOD: switch mesh detail based on camera distance
+    this.updateLod();
 
     this.cleanupDead();
   }
@@ -258,8 +271,12 @@ export class ZombieManager {
         r.instance.root.rotation.y = 0;
         stopAllAnims(l.instance);
         stopAllAnims(r.instance);
-        const lAnim = l.useAltAttack ? l.instance.punchComboAnim : l.instance.attackAnim;
-        const rAnim = r.useAltAttack ? r.instance.punchComboAnim : r.instance.attackAnim;
+        const lAnim = l.useAltAttack
+          ? pickAnim(l.instance, "punchComboAnim", "lodPunchComboAnim")
+          : pickAnim(l.instance, "attackAnim", "lodAttackAnim");
+        const rAnim = r.useAltAttack
+          ? pickAnim(r.instance, "punchComboAnim", "lodPunchComboAnim")
+          : pickAnim(r.instance, "attackAnim", "lodAttackAnim");
         lAnim.start(true);
         rAnim.start(true);
       }
@@ -273,8 +290,8 @@ export class ZombieManager {
     z.deathTimer = 0;
     stopAllAnims(z.instance);
     const deathAnim = z.useAltDeath
-      ? z.instance.dyingBackwardsAnim
-      : z.instance.dieAnim;
+      ? pickAnim(z.instance, "dyingBackwardsAnim", "lodDyingBackwardsAnim")
+      : pickAnim(z.instance, "dieAnim", "lodDieAnim");
     deathAnim.start(false);
     this.spawnDecal(z.x, z.z);
   }
@@ -349,6 +366,9 @@ export class ZombieManager {
       for (const mesh of instance.meshes) {
         if (mesh.material) mesh.material.freeze();
       }
+      for (const mesh of instance.lodMeshes) {
+        if (mesh.material) mesh.material.freeze();
+      }
     }
 
     instance.root.position.x = x;
@@ -360,7 +380,7 @@ export class ZombieManager {
     const useAltAttack = Math.random() < 0.5;
     const useAltDeath = Math.random() < 0.5;
 
-    // Start with scream animation
+    // Start with scream animation (always hi-detail since freshly spawned/recycled)
     stopAllAnims(instance);
     instance.screamAnim.start(false);
 
@@ -383,6 +403,24 @@ export class ZombieManager {
     });
   }
 
+  private updateLod() {
+    const cam = this.scene.activeCamera;
+    if (!cam) return;
+    const camPos = cam.position;
+    const tmpVec = Vector3.Zero();
+
+    for (const z of this.zombies) {
+      if (z.state === "dying") continue; // don't LOD-switch dying zombies mid-animation
+      tmpVec.set(z.x, 0, z.z);
+      const dist = Vector3.Distance(camPos, tmpVec);
+      if (dist > LOD_DISTANCE && !z.instance.isLod) {
+        switchToLod(z.instance);
+      } else if (dist <= LOD_DISTANCE && z.instance.isLod) {
+        switchToHiDetail(z.instance);
+      }
+    }
+  }
+
   private cleanupDead() {
     let write = 0;
     for (let read = 0; read < this.zombies.length; read++) {
@@ -390,7 +428,11 @@ export class ZombieManager {
       if (z.state === "dying" && z.deathTimer >= BODY_LINGER) {
         hideZombie(z.instance);
         z.instance.root.rotation.set(0, 0, 0);
+        // Reset visibility on both mesh sets
         for (const mesh of z.instance.meshes) mesh.visibility = 1;
+        for (const mesh of z.instance.lodMeshes) mesh.visibility = 1;
+        // Reset to hi-detail for next reuse
+        z.instance.isLod = false;
         if (this.pool.length < MAX_POOL) {
           this.pool.push(z.instance);
         } else {
