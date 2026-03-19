@@ -7,6 +7,8 @@ export function processServerMessages(
   logic: GameLogic,
   callbacks: {
     onQueueJoined?: () => void;
+    onQueueStatus?: (estimatedWaitSec: number, rangeWidth: number) => void;
+    onQueueTimeout?: () => void;
     onMatchFound?: (side: PlayerSide) => void;
     onGameOver?: (winner: PlayerSide) => void;
     onOpponentDisconnected?: () => void;
@@ -20,6 +22,14 @@ export function processServerMessages(
     switch (msg.type) {
       case "QueueJoined":
         callbacks.onQueueJoined?.();
+        break;
+
+      case "QueueStatus":
+        callbacks.onQueueStatus?.(msg.estimatedWaitSec, msg.rangeWidth);
+        break;
+
+      case "QueueTimeout":
+        callbacks.onQueueTimeout?.();
         break;
 
       case "MatchFound":

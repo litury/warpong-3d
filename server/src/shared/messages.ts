@@ -81,6 +81,8 @@ export type ServerMessage =
   | { type: "OpponentDisconnected"; reward: number; coins: number }
   | { type: "GamePaused"; reason: "opponent_disconnected"; secondsLeft: number }
   | { type: "GameResumed" }
+  | { type: "QueueStatus"; estimatedWaitSec: number; rangeWidth: number }
+  | { type: "QueueTimeout" }
   | { type: "OnlineCount"; count: number }
   | { type: "OpponentChat"; chatId: QuickChatId }
   | { type: "Error"; message: string };

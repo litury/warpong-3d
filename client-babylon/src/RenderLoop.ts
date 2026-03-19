@@ -33,6 +33,8 @@ export function startRenderLoop(
     if (state.mode === "online") {
       processServerMessages(ws, logic, {
         onQueueJoined: () => ui.showWaiting(),
+        onQueueStatus: (sec) => ui.showQueueStatus(sec),
+        onQueueTimeout: () => ui.showQueueTimeout(),
         onMatchFound: (side) => {
           state.playerSide = side;
           onStartGame();
