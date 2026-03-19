@@ -22,7 +22,6 @@ import {
   updateTime,
   type ZombieThinHandle,
 } from "./ZombieLoader";
-import { SpatialGrid } from "./SpatialGrid";
 
 const ZOMBIE_SPEED = 60;
 const SPAWN_INTERVAL = 3;
@@ -55,6 +54,69 @@ export interface Zombie {
   useAltDeath: boolean;
   rotY: number;
   currentAnim: string;
+}
+
+class SpatialGrid {
+  private cellInv: number;
+  private cells = new Map<number, Zombie[]>();
+
+  constructor(cellSize: number) {
+    this.cellInv = 1 / cellSize;
+  }
+
+  clear() {
+    this.cells.clear();
+  }
+
+  insert(z: Zombie) {
+    const key = this.key(z.x, z.z);
+    const bucket = this.cells.get(key);
+    if (bucket) {
+      bucket.push(z);
+    } else {
+      this.cells.set(key, [z]);
+    }
+  }
+
+  forEachFightPair(callback: (l: Zombie, r: Zombie) => boolean) {
+    for (const [key, bucket] of this.cells) {
+      this.checkBucket(bucket, callback);
+      const cx = key & 0xFFFF;
+      const cz = (key >> 16) & 0xFFFF;
+      for (const [dx, dz] of [[1, 0], [0, 1], [1, 1], [-1, 1]] as const) {
+        const nk = ((cz + dz) & 0xFFFF) << 16 | ((cx + dx) & 0xFFFF);
+        const neighbour = this.cells.get(nk);
+        if (neighbour) this.checkCross(bucket, neighbour, callback);
+      }
+    }
+  }
+
+  private checkBucket(bucket: Zombie[], cb: (l: Zombie, r: Zombie) => boolean) {
+    for (let i = 0; i < bucket.length; i++) {
+      for (let j = i + 1; j < bucket.length; j++) {
+        const a = bucket[i], b = bucket[j];
+        if (a.side === b.side) continue;
+        const [l, r] = a.side === "left" ? [a, b] : [b, a];
+        if (cb(l, r)) return;
+      }
+    }
+  }
+
+  private checkCross(a: Zombie[], b: Zombie[], cb: (l: Zombie, r: Zombie) => boolean) {
+    for (const za of a) {
+      for (const zb of b) {
+        if (za.side === zb.side) continue;
+        const [l, r] = za.side === "left" ? [za, zb] : [zb, za];
+        if (cb(l, r)) return;
+      }
+    }
+  }
+
+  private key(x: number, z: number): number {
+    const cx = ((x * this.cellInv) | 0) & 0xFFFF;
+    const cz = ((z * this.cellInv) | 0) & 0xFFFF;
+    return (cz << 16) | cx;
+  }
 }
 
 export class ZombieManager {
