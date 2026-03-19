@@ -1,23 +1,12 @@
-# Documentation (internal, not for VCS)
-/doc
-
-# Rust build artifacts
-/target
-/client/pkg
-
 # JS/Node
-client-js/node_modules/
-client-js/dist/
 client-babylon/node_modules/
 client-babylon/dist/
 
-# Server DB
+# Server
+server/node_modules/
 server/pong.db
 server/pong.db-shm
 server/pong.db-wal
-
-# Dist output
-/dist
 
 # Claude project data
 /.claude

@@ -1,200 +1,244 @@
 import { Scene } from "@babylonjs/core/scene";
-import { Matrix, Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector";
-import { initZombieVAT, type ZombieVATData, type AnimRangeInfo } from "./ZombieVAT";
+import { SceneLoader } from "@babylonjs/core/Loading/sceneLoader";
+import { AssetContainer } from "@babylonjs/core/assetContainer";
+import { AnimationGroup } from "@babylonjs/core/Animations/animationGroup";
+import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
+import { Mesh } from "@babylonjs/core/Meshes/mesh";
+import { Skeleton } from "@babylonjs/core/Bones/skeleton";
+import "@babylonjs/loaders/glTF";
 
-const MAX_INSTANCES = 40;
-const ANIM_FPS = 30;
+export interface ZombieInstance {
+  root: TransformNode;
+  meshes: Mesh[];
+  skeleton: Skeleton | null;
+  anims: Map<string, AnimationGroup>;
 
-// Hidden instance: scale 0 matrix
-const ZERO_MATRIX = Matrix.Scaling(0, 0, 0);
-const HIDDEN_ANIM_PARAMS = [0, 0, 0, 0];
-
-export interface ZombieThinHandle {
-  index: number;
+  // Convenience getters (backward-compat with ZombieManager)
+  walkAnim: AnimationGroup;
+  monsterWalkAnim: AnimationGroup;
+  injuredWalkAnim: AnimationGroup;
+  attackAnim: AnimationGroup;
+  punchComboAnim: AnimationGroup;
+  dieAnim: AnimationGroup;
+  dyingBackwardsAnim: AnimationGroup;
+  screamAnim: AnimationGroup;
 }
 
-// Module state
-let vatData: ZombieVATData | null = null;
-let matrixBuffer: Float32Array;
-let animBuffer: Float32Array;
-let freeList: number[] = [];
-let highWaterMark = 0; // highest active index + 1
+const MODEL_DIR = "/assets/zombie/";
+const ANIMS_DIR = "/assets/zombie/anims/";
 
-// Temp objects to avoid per-frame allocations
-const tmpMatrix = Matrix.Identity();
-const tmpQuat = new Quaternion();
-const tmpScale = new Vector3();
-const tmpPos = new Vector3();
+const modelContainers = new Map<string, AssetContainer>();
+const animContainerCache = new Map<string, AssetContainer>();
+let zombieCounter = 0;
 
-export async function initZombieInstances(scene: Scene): Promise<void> {
-  vatData = await initZombieVAT(scene);
+const SIDE_MODEL: Record<string, string> = {
+  left: "model_blue_rigged.glb",
+  right: "model_red_rigged.glb",
+};
 
-  // Pre-allocate buffers
-  matrixBuffer = new Float32Array(MAX_INSTANCES * 16);
-  animBuffer = new Float32Array(MAX_INSTANCES * 4);
+const ALL_ANIMS = [
+  "walk", "walk_alt1", "walk_alt2",
+  "attack", "attack_alt1", "attack_alt2",
+  "die", "die_alt1", "die_alt2",
+  "scream",
+];
 
-  // Initialize all slots as hidden (zero-scale)
-  const zeroArr = new Float32Array(16);
-  ZERO_MATRIX.copyToArray(zeroArr);
-  for (let i = 0; i < MAX_INSTANCES; i++) {
-    matrixBuffer.set(zeroArr, i * 16);
-  }
+const WALK_VARIANTS = ["walk", "walk_alt1", "walk_alt2"];
+const ATTACK_VARIANTS = ["attack", "attack_alt1", "attack_alt2"];
+const DIE_VARIANTS = ["die", "die_alt1", "die_alt2"];
 
-  // Set up thin instance buffers (dynamic)
-  vatData.mesh.thinInstanceSetBuffer("matrix", matrixBuffer, 16, false);
-  vatData.mesh.thinInstanceRegisterAttribute("bakedVertexAnimationSettingsInstanced", 4);
-  vatData.mesh.thinInstanceSetBuffer("bakedVertexAnimationSettingsInstanced", animBuffer, 4, false);
-  vatData.mesh.thinInstanceCount = 0;
-
-  // Build free list (all slots available, in reverse for pop efficiency)
-  freeList = [];
-  for (let i = MAX_INSTANCES - 1; i >= 0; i--) {
-    freeList.push(i);
-  }
-  highWaterMark = 0;
+function pickRandom<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
 }
 
-export function acquireInstance(): ZombieThinHandle | null {
-  if (freeList.length === 0) return null;
-  const index = freeList.pop()!;
-  if (index >= highWaterMark) {
-    highWaterMark = index + 1;
-  }
-  vatData!.mesh.thinInstanceCount = highWaterMark;
-  return { index };
+async function ensureModelContainer(scene: Scene, side: "left" | "right"): Promise<AssetContainer> {
+  const fileName = SIDE_MODEL[side];
+  const cached = modelContainers.get(fileName);
+  if (cached) return cached;
+  const container = await SceneLoader.LoadAssetContainerAsync(MODEL_DIR, fileName, scene);
+  // Удалить встроенные lights из GLB — они клонируются при каждом instantiate
+  for (const light of container.lights) light.dispose();
+  container.lights.length = 0;
+  modelContainers.set(fileName, container);
+  return container;
 }
 
-export function releaseInstance(h: ZombieThinHandle): void {
-  // Hide by setting zero-scale matrix
-  const offset = h.index * 16;
-  ZERO_MATRIX.copyToArray(matrixBuffer, offset);
-
-  // Zero out animation params
-  const animOffset = h.index * 4;
-  animBuffer.set(HIDDEN_ANIM_PARAMS, animOffset);
-
-  freeList.push(h.index);
-
-  // Recalculate high water mark
-  recalcHighWaterMark();
+export async function preloadZombieAssets(scene: Scene): Promise<void> {
+  await Promise.all([
+    ensureModelContainer(scene, "left"),
+    ensureModelContainer(scene, "right"),
+    ...ALL_ANIMS.map(name => ensureAnimContainer(scene, name)),
+  ]);
 }
 
-function recalcHighWaterMark(): void {
-  // Build a set of free indices for fast lookup
-  const freeSet = new Set(freeList);
-  let mark = highWaterMark;
-  while (mark > 0 && freeSet.has(mark - 1)) {
-    mark--;
-  }
-  highWaterMark = mark;
-  vatData!.mesh.thinInstanceCount = highWaterMark;
+async function ensureAnimContainer(scene: Scene, animName: string): Promise<AssetContainer> {
+  const cached = animContainerCache.get(animName);
+  if (cached) return cached;
+  const container = await SceneLoader.LoadAssetContainerAsync(ANIMS_DIR, `${animName}.glb`, scene);
+  // Strip mesh/material/texture data — we only need animation groups.
+  // Anim GLBs contain the full model mesh+textures which waste ~100MB+ of GPU memory.
+  for (const tex of container.textures) tex.dispose();
+  for (const mat of container.materials) mat.dispose();
+  for (const mesh of container.meshes) mesh.dispose();
+  for (const geo of container.geometries) geo.dispose();
+  container.textures.length = 0;
+  container.materials.length = 0;
+  container.meshes.length = 0;
+  container.geometries.length = 0;
+  animContainerCache.set(animName, container);
+  return container;
 }
 
-export function setTransform(
-  h: ZombieThinHandle,
-  x: number, y: number, z: number,
-  rotY: number,
-  scaleVal: number,
-): void {
-  tmpPos.set(x, y, z);
-  tmpScale.set(scaleVal, scaleVal, scaleVal);
-  Quaternion.FromEulerAnglesToRef(0, rotY, 0, tmpQuat);
-  Matrix.ComposeToRef(tmpScale, tmpQuat, tmpPos, tmpMatrix);
-  tmpMatrix.copyToArray(matrixBuffer, h.index * 16);
-}
+export async function spawnZombie(scene: Scene, side: "left" | "right" = "left"): Promise<ZombieInstance> {
+  const c = await ensureModelContainer(scene, side);
+  const id = zombieCounter++;
+  const prefix = `zombie_${id}`;
 
-export function setAnimation(
-  h: ZombieThinHandle,
-  animName: string,
-  _loop: boolean,
-  globalTime: number,
-): void {
-  const info = findAnim(animName);
-  if (!info) return;
+  const inst = c.instantiateModelsToScene(name => `${prefix}_${name}`, true);
 
-  const offset = h.index * 4;
-  animBuffer[offset + 0] = info.startFrame;     // startFrame
-  animBuffer[offset + 1] = info.endFrame;        // endFrame
-  animBuffer[offset + 2] = -globalTime;           // offset (negative so anim starts from frame 0 at this moment)
-  animBuffer[offset + 3] = ANIM_FPS;              // speed (frames per second)
-}
+  // Wrap GLB root in a parent so rotation is not overridden by animations
+  const glbRoot = inst.rootNodes[0] as TransformNode;
+  const root = new TransformNode(`${prefix}_wrapper`, scene);
+  glbRoot.parent = root;
 
-export function freezeOnLastFrame(h: ZombieThinHandle, animName: string): void {
-  const info = findAnim(animName);
-  if (!info) return;
-
-  const offset = h.index * 4;
-  // Set start=end-1, end=end, speed=0 → frozen on last frame
-  animBuffer[offset + 0] = info.endFrame - 1;
-  animBuffer[offset + 1] = info.endFrame;
-  animBuffer[offset + 2] = 0;
-  animBuffer[offset + 3] = 0;
-}
-
-export function setInstanceScale(h: ZombieThinHandle, scaleVal: number): void {
-  // Read current matrix, extract position & rotation, recompose with new scale
-  // For perf, we directly scale the matrix columns (first 3 column vectors)
-  const offset = h.index * 16;
-  // Simple approach: we know the matrix structure, so re-normalize and scale
-  // Actually, let's just store the params and recompose — simpler and correct
-  // We'll need the caller to pass full transform again. Provide a scale-only shortcut:
-  for (let col = 0; col < 3; col++) {
-    const base = offset + col * 4;
-    // Each column's length is the current scale on that axis
-    const cx = matrixBuffer[base + 0];
-    const cy = matrixBuffer[base + 1];
-    const cz = matrixBuffer[base + 2];
-    const len = Math.sqrt(cx * cx + cy * cy + cz * cz);
-    if (len > 0) {
-      const factor = scaleVal / len;
-      matrixBuffer[base + 0] *= factor;
-      matrixBuffer[base + 1] *= factor;
-      matrixBuffer[base + 2] *= factor;
+  // Collect meshes
+  const meshes: Mesh[] = [];
+  for (const node of inst.rootNodes) {
+    if (node instanceof Mesh) meshes.push(node);
+    for (const child of node.getChildMeshes(false)) {
+      if (child instanceof Mesh) meshes.push(child);
     }
   }
+
+  for (const mesh of meshes) {
+    mesh.receiveShadows = false;
+    if (mesh.material) {
+      const mat = mesh.material as any;
+      mat.unlit = true;
+      mesh.material.freeze();
+    }
+  }
+
+  const skeleton = inst.skeletons.length > 0 ? inst.skeletons[0] : null;
+
+  // Build bone lookup by base name (without instance prefix)
+  const boneNodeMap = new Map<string, TransformNode>();
+  for (const node of glbRoot.getChildTransformNodes(false)) {
+    const baseName = node.name.replace(`${prefix}_`, "");
+    boneNodeMap.set(baseName, node);
+  }
+
+  const anims = new Map<string, AnimationGroup>();
+
+  async function loadAnimForInstance(animName: string): Promise<AnimationGroup> {
+    const existing = anims.get(animName);
+    if (existing) return existing;
+
+    const animContainer = await ensureAnimContainer(scene, animName);
+    const sourceAg = animContainer.animationGroups[0];
+    if (!sourceAg) throw new Error(`No animation found in ${animName}.glb`);
+
+    const retargetedAg = new AnimationGroup(`${prefix}_${animName}`, scene);
+
+    for (const ta of sourceAg.targetedAnimations) {
+      const sourceBoneName = (ta.target as TransformNode).name;
+      const targetNode = boneNodeMap.get(sourceBoneName);
+      if (!targetNode) continue;
+
+      // Skip root bone position & rotation for non-death anims — movement is driven by game logic.
+      // Death anims need root bone to move the body to the ground.
+      const isRootBone = sourceBoneName === "Armature" || sourceBoneName.includes("Hips");
+      const isDeathAnim = animName.startsWith("die");
+      if (isRootBone && !isDeathAnim && ta.animation.targetProperty === "position") continue;
+      if (isRootBone && !isDeathAnim && ta.animation.targetProperty === "rotationQuaternion") continue;
+
+      retargetedAg.addTargetedAnimation(ta.animation, targetNode);
+    }
+
+    retargetedAg.stop();
+    anims.set(animName, retargetedAg);
+    return retargetedAg;
+  }
+
+  // Preload all animations
+  await Promise.all(ALL_ANIMS.map(loadAnimForInstance));
+
+  // Pick random animation variants for this zombie instance
+  const walkKey = pickRandom(WALK_VARIANTS);
+  const walkAltKey = pickRandom(WALK_VARIANTS);
+  const attackAltKey = pickRandom(ATTACK_VARIANTS);
+  const dieAltKey = pickRandom(DIE_VARIANTS);
+
+  return {
+    root, meshes, skeleton, anims,
+    get walkAnim() { return anims.get("walk")!; },
+    get monsterWalkAnim() { return anims.get(walkKey)!; },
+    get injuredWalkAnim() { return anims.get(walkAltKey)!; },
+    get attackAnim() { return anims.get("attack")!; },
+    get punchComboAnim() { return anims.get(attackAltKey)!; },
+    get dieAnim() { return anims.get("die")!; },
+    get dyingBackwardsAnim() { return anims.get(dieAltKey)!; },
+    get screamAnim() { return anims.get("scream")!; },
+  };
 }
 
-export function updateTime(dt: number): void {
-  if (vatData) {
-    vatData.manager.time += dt;
+export function scaleZombieToHeight(zombie: ZombieInstance, targetHeight: number) {
+  let minY = Infinity, maxY = -Infinity;
+  for (const mesh of zombie.meshes) {
+    mesh.computeWorldMatrix(true);
+    const bounds = mesh.getBoundingInfo();
+    if (bounds) {
+      minY = Math.min(minY, bounds.boundingBox.minimumWorld.y);
+      maxY = Math.max(maxY, bounds.boundingBox.maximumWorld.y);
+    }
+  }
+  const currentHeight = maxY - minY;
+  if (currentHeight > 0) {
+    const scale = targetHeight / currentHeight;
+    zombie.root.scaling.setAll(scale);
   }
 }
 
-export function getGlobalTime(): number {
-  return vatData ? vatData.manager.time : 0;
+export function stopAllAnims(zombie: ZombieInstance) {
+  for (const ag of zombie.anims.values()) ag.stop();
 }
 
-export function getAnimDuration(animName: string): number {
-  const info = findAnim(animName);
-  if (!info) return 1;
-  return info.frameCount / ANIM_FPS;
+export function hideZombie(zombie: ZombieInstance) {
+  stopAllAnims(zombie);
+  for (const mesh of zombie.meshes) mesh.setEnabled(false);
+  root_setEnabled(zombie.root, false);
 }
 
-export function flushBuffers(): void {
-  if (!vatData) return;
-  vatData.mesh.thinInstanceBufferUpdated("matrix");
-  vatData.mesh.thinInstanceBufferUpdated("bakedVertexAnimationSettingsInstanced");
+export function showZombie(zombie: ZombieInstance) {
+  root_setEnabled(zombie.root, true);
+  for (const mesh of zombie.meshes) mesh.setEnabled(true);
 }
 
-export function disposeAll(): void {
-  if (vatData) {
-    vatData.mesh.dispose();
-    vatData.vatTexture.dispose();
-    vatData.manager.dispose();
-    vatData = null;
+function root_setEnabled(root: TransformNode, enabled: boolean) {
+  root.setEnabled(enabled);
+  for (const child of root.getChildTransformNodes(false)) {
+    child.setEnabled(enabled);
   }
-  freeList = [];
-  highWaterMark = 0;
 }
 
-function findAnim(name: string): AnimRangeInfo | undefined {
-  if (!vatData) return undefined;
-  // Try exact match first, then substring match
-  const lower = name.toLowerCase();
-  const exact = vatData.anims.get(lower);
-  if (exact) return exact;
-  for (const [key, info] of vatData.anims) {
-    if (key.includes(lower) || lower.includes(key)) return info;
-  }
-  return undefined;
+export function disposeZombie(zombie: ZombieInstance) {
+  for (const ag of zombie.anims.values()) { ag.stop(); ag.dispose(); }
+  for (const mesh of zombie.meshes) mesh.dispose();
+  if (zombie.skeleton) zombie.skeleton.dispose();
+  zombie.root.getChildTransformNodes(false).forEach(n => n.dispose());
+  zombie.root.dispose();
+}
+
+/** Dispose skeleton, animations, and transform nodes but NOT meshes (already consumed by MergeMeshes). */
+export function disposeZombieAnimsOnly(zombie: ZombieInstance) {
+  for (const ag of zombie.anims.values()) { ag.stop(); ag.dispose(); }
+  if (zombie.skeleton) zombie.skeleton.dispose();
+  zombie.root.getChildTransformNodes(false).forEach(n => n.dispose());
+  zombie.root.dispose();
+}
+
+export function resetTemplate() {
+  modelContainers.clear();
+  animContainerCache.clear();
+  zombieCounter = 0;
 }

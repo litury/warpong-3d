@@ -31,6 +31,7 @@ export class GameLogic {
 
   onScore?: (leftScored: boolean) => void;
   onGameOver?: (leftWon: boolean) => void;
+  onPaddleHit?: (isRight: boolean, hitY: number) => void;
 
   update(dt: number, inputDir: number, touchWorldY: number | null) {
     if (this.gameOver) return;
@@ -103,6 +104,7 @@ export class GameLogic {
       b.vx = bounce.vx;
       b.vy = bounce.vy;
       b.x = lpX + PADDLE_WIDTH / 2 + BALL_SIZE / 2 + 1;
+      this.onPaddleHit?.(false, b.y);
     }
 
     // Right paddle
@@ -123,6 +125,7 @@ export class GameLogic {
       b.vx = bounce.vx;
       b.vy = bounce.vy;
       b.x = rpX - PADDLE_WIDTH / 2 - BALL_SIZE / 2 - 1;
+      this.onPaddleHit?.(true, b.y);
     }
   }
 

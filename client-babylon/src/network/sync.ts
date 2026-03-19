@@ -1,35 +1,26 @@
+import type { ServerMessage, PlayerSide } from "../shared/messages";
 import type { GameLogic } from "../game/GameLogic";
-import type { PlayerSide, ServerMessage } from "../shared/messages";
 import type { WsClient } from "./wsClient";
 
 export function processServerMessages(
   ws: WsClient,
   logic: GameLogic,
+  playerSide: PlayerSide | null,
   callbacks: {
     onQueueJoined?: () => void;
-    onQueueStatus?: (estimatedWaitSec: number, rangeWidth: number) => void;
-    onQueueTimeout?: () => void;
     onMatchFound?: (side: PlayerSide) => void;
     onGameOver?: (winner: PlayerSide) => void;
     onOpponentDisconnected?: () => void;
-    onScoreUpdate?: (left: number, right: number) => void;
+    onScoreUpdate?: () => void;
     onOnlineCount?: (count: number) => void;
-    onGamePaused?: (secondsLeft: number) => void;
-    onGameResumed?: () => void;
   },
 ) {
+  const mirror = playerSide === "Right";
+
   for (const msg of ws.drainInbox()) {
     switch (msg.type) {
       case "QueueJoined":
         callbacks.onQueueJoined?.();
-        break;
-
-      case "QueueStatus":
-        callbacks.onQueueStatus?.(msg.estimatedWaitSec, msg.rangeWidth);
-        break;
-
-      case "QueueTimeout":
-        callbacks.onQueueTimeout?.();
         break;
 
       case "MatchFound":
@@ -37,17 +28,21 @@ export function processServerMessages(
         break;
 
       case "GameStateUpdate":
-        logic.applyServerState(
-          msg.ball.x,
-          msg.ball.y,
-          msg.ball.vx,
-          msg.ball.vy,
-          msg.leftPaddle.y,
-          msg.rightPaddle.y,
-          msg.score.left,
-          msg.score.right,
-        );
-        callbacks.onScoreUpdate?.(msg.score.left, msg.score.right);
+        if (mirror) {
+          // Mirror X axis + swap paddles/scores so Right player sees themselves on the left (bottom)
+          logic.applyServerState(
+            -msg.ball.x, msg.ball.y, -msg.ball.vx, msg.ball.vy,
+            msg.rightPaddle.y, msg.leftPaddle.y,
+            msg.score.right, msg.score.left,
+          );
+        } else {
+          logic.applyServerState(
+            msg.ball.x, msg.ball.y, msg.ball.vx, msg.ball.vy,
+            msg.leftPaddle.y, msg.rightPaddle.y,
+            msg.score.left, msg.score.right,
+          );
+        }
+        callbacks.onScoreUpdate?.();
         break;
 
       case "GameOver":
@@ -58,14 +53,6 @@ export function processServerMessages(
       case "OpponentDisconnected":
         logic.gameOver = true;
         callbacks.onOpponentDisconnected?.();
-        break;
-
-      case "GamePaused":
-        callbacks.onGamePaused?.(msg.secondsLeft);
-        break;
-
-      case "GameResumed":
-        callbacks.onGameResumed?.();
         break;
 
       case "OnlineCount":
