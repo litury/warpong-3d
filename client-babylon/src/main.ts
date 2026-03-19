@@ -1,4 +1,5 @@
 import { Engine } from "@babylonjs/core/Engines/engine";
+import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { createGameScene } from "./game/GameScene";
 import { GameLogic } from "./game/GameLogic";
 import { InputManager } from "./game/InputManager";
@@ -7,19 +8,23 @@ import { WsClient } from "./network/wsClient";
 import { AppState } from "./AppState";
 import { queryUIElements, UIManager } from "./UIManager";
 import { startRenderLoop } from "./RenderLoop";
+import { triggerShieldImpact } from "./game/EnergyShieldMaterial";
+import { preloadZombieAssets } from "./game/ZombieLoader";
 
 const canvas = document.getElementById("renderCanvas") as HTMLCanvasElement;
 
 async function main() {
   const engine = new Engine(canvas, true, { stencil: true });
-  const { scene, objects, updateScoreboard } = await createGameScene(engine);
+  const { scene, objects, shadowGen, updateScoreboard } = await createGameScene(engine);
 
   const state = new AppState();
   const logic = new GameLogic();
   const input = new InputManager(canvas);
   const ws = new WsClient();
-  const zombieManager = new ZombieManager(scene);
+  const zombieManager = new ZombieManager(scene, shadowGen);
   const ui = new UIManager(queryUIElements(), updateScoreboard);
+
+  await preloadZombieAssets(scene);
 
   ui.hideLoading();
   ui.showMenu();
@@ -32,6 +37,12 @@ async function main() {
     ui.updateCoins(zombieManager);
     state.resetForNewGame();
   }
+
+  logic.onPaddleHit = (isRight, hitY) => {
+    const mat = isRight ? objects.rightShieldMat : objects.leftShieldMat;
+    const shield = isRight ? objects.rightShield : objects.leftShield;
+    triggerShieldImpact(mat, shield, new Vector3(shield.position.x, 7.5, -hitY), performance.now() / 1000);
+  };
 
   logic.onScore = () => ui.updateScore(logic);
 

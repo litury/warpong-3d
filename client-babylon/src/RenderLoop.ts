@@ -1,19 +1,26 @@
+import type { AnimationGroup } from "@babylonjs/core/Animations/animationGroup";
 import type { Engine } from "@babylonjs/core/Engines/engine";
 import type { Scene } from "@babylonjs/core/scene";
-import type { GameObjects } from "./game/GameScene";
+import type { AppState, MechAnimState } from "./AppState";
+import { ARENA_HEIGHT, PADDLE_HEIGHT } from "./config/gameConfig";
 import type { GameLogic } from "./game/GameLogic";
+import type { GameObjects } from "./game/GameScene";
 import type { InputManager } from "./game/InputManager";
-import type { WsClient } from "./network/wsClient";
+import type { LoadedMech } from "./game/MechLoader";
 import type { ZombieManager } from "./game/ZombieManager";
-import type { UIManager } from "./UIManager";
-import type { AppState } from "./AppState";
 import { processServerMessages } from "./network/sync";
-import { BALL_SIZE } from "./config/gameConfig";
+import type { WsClient } from "./network/wsClient";
+import type { UIManager } from "./UIManager";
+import { updateShieldTime, triggerShieldImpact } from "./game/EnergyShieldMaterial";
+import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 
-const ROTATION_SPEED = 8;
 const IDLE_DELAY = 0.1;
-const LEFT_IDLE_FACING = Math.PI / 2;
-const RIGHT_IDLE_FACING = -Math.PI / 2;
+const BLEND_SPEED = 0.06;
+const IDLE_BLEND_SPEED = 0.09;
+const MECH_LERP_SPEED = 12;
+const VELOCITY_SMOOTHING = 15;
+const ANIM_STRIDE_SPEED = 200;
+const MIN_MOVE_THRESHOLD = 1;
 
 export function startRenderLoop(
   engine: Engine,
@@ -27,11 +34,19 @@ export function startRenderLoop(
   state: AppState,
   onStartGame: () => void,
 ) {
+  let prevBallVx = 0;
+  let lastHitBy: "left" | "right" = "left";
+
   engine.runRenderLoop(() => {
     const dt = engine.getDeltaTime() / 1000;
+    const now = performance.now() / 1000;
+
+    // Update energy shield time uniforms
+    updateShieldTime(objects.leftShieldMat, now);
+    updateShieldTime(objects.rightShieldMat, now);
 
     if (state.mode === "online") {
-      processServerMessages(ws, logic, {
+      processServerMessages(ws, logic, state.playerSide, {
         onQueueJoined: () => ui.showWaiting(),
         onMatchFound: (side) => {
           state.playerSide = side;
@@ -57,15 +72,29 @@ export function startRenderLoop(
     }
 
     if (state.playing) {
-      syncPositions(objects, logic);
-      updateMechAnimations(objects, logic, input, state, dt);
-      state.prevLeftY = logic.leftPaddleY;
-      state.prevRightY = logic.rightPaddleY;
+      // Detect paddle hits by ball velocity sign change → shield impact ripple
+      const currVx = logic.ball.vx;
+      const vehiclePos = objects.vehicle.root.position;
+      if (prevBallVx < 0 && currVx > 0) {
+        lastHitBy = "left";
+        triggerShieldImpact(objects.leftShieldMat, objects.leftShield,
+          new Vector3(vehiclePos.x, vehiclePos.y, vehiclePos.z), now);
+      } else if (prevBallVx > 0 && currVx < 0) {
+        lastHitBy = "right";
+        triggerShieldImpact(objects.rightShieldMat, objects.rightShield,
+          new Vector3(vehiclePos.x, vehiclePos.y, vehiclePos.z), now);
+      }
+      prevBallVx = currVx;
+
+      objects.vehicle.flame.update(dt);
+      syncPositions(objects, logic, state, dt);
+      updateStrafeAnim(objects.leftMech, state.leftMech, dt, 1);
+      updateStrafeAnim(objects.rightMech, state.rightMech, dt, -1);
 
       if (state.mode === "solo" && !logic.gameOver) {
         zombieManager.update(dt);
         const ballZ = -logic.ball.y;
-        zombieManager.checkBallCollisions(logic.ball.x, ballZ);
+        zombieManager.checkBallCollisions(logic.ball.x, ballZ, lastHitBy);
       }
     }
 
@@ -74,80 +103,103 @@ export function startRenderLoop(
   });
 }
 
-function syncPositions(obj: GameObjects, logic: GameLogic) {
-  obj.ball.position.x = logic.ball.x;
-  obj.ball.position.z = -logic.ball.y;
-  obj.ball.position.y = BALL_SIZE / 2;
+const WHEEL_SPIN_FACTOR = 0.15;
 
-  obj.leftShield.position.z = -logic.leftPaddleY;
-  obj.rightShield.position.z = -logic.rightPaddleY;
+function syncPositions(obj: GameObjects, logic: GameLogic, state: AppState, dt: number) {
+  // Vehicle position (sits on ground)
+  const root = obj.vehicle.root;
+  root.position.x = logic.ball.x;
+  root.position.z = -logic.ball.y;
+  root.position.y = 7.5;  // raise so wheels sit on floor (model origin is at center)
 
-  obj.leftMech.root.position.z = -logic.leftPaddleY;
-  obj.rightMech.root.position.z = -logic.rightPaddleY;
+  // Vehicle faces movement direction
+  const { vx, vy } = logic.ball;
+  const speed = Math.sqrt(vx * vx + vy * vy);
+  if (speed > 1) {
+    root.rotation.y = Math.atan2(-vy, vx) - Math.PI / 2;
+  }
+
+  // Wheel spin proportional to speed
+  for (const wheel of obj.vehicle.wheels) {
+    wheel.rotation.x += speed * dt * WHEEL_SPIN_FACTOR;
+  }
+
+  // Shield = paddle. Clamp with margin so shield + glow stays inside arena walls.
+  const shieldBound = ARENA_HEIGHT / 2 - PADDLE_HEIGHT / 2 - 10;
+  const leftShieldZ = clamp(-logic.leftPaddleY, -shieldBound, shieldBound);
+  const rightShieldZ = clamp(-logic.rightPaddleY, -shieldBound, shieldBound);
+  obj.leftShield.position.z = leftShieldZ;
+  obj.rightShield.position.z = rightShieldZ;
+
+  // Мехи follow the CLAMPED shield position (shield is the paddle, mech follows it)
+  const lerpFactor = 1 - Math.exp(-MECH_LERP_SPEED * dt);
+
+  state.leftMech.visualZ += (leftShieldZ - state.leftMech.visualZ) * lerpFactor;
+  obj.leftMech.root.position.z = state.leftMech.visualZ;
+
+  state.rightMech.visualZ += (rightShieldZ - state.rightMech.visualZ) * lerpFactor;
+  obj.rightMech.root.position.z = state.rightMech.visualZ;
 }
 
-function updateMechAnimations(
-  obj: GameObjects,
-  logic: GameLogic,
-  input: InputManager,
-  state: AppState,
+function updateStrafeAnim(
+  mech: LoadedMech,
+  anim: MechAnimState,
   dt: number,
+  flipDir: number,
 ) {
-  const dir = input.getDirection();
-  const leftMoving = dir !== 0;
-  const rightMoving = Math.abs(logic.rightPaddleY - state.prevRightY) > 0.5;
+  // Визуальная скорость из дельты сглаженной позиции
+  const deltaZ = anim.visualZ - anim.prevY;
+  const instantVelocity = dt > 0 ? Math.abs(deltaZ) / dt : 0;
 
-  if (leftMoving) {
-    state.leftIdleTimer = 0;
-    if (!state.leftWalking) {
-      obj.leftMech.idleAnim.stop();
-      obj.leftMech.walkAnim.start(true);
-      state.leftWalking = true;
+  // Сглаживаем velocity (frame-rate independent)
+  const vLerp = 1 - Math.exp(-VELOCITY_SMOOTHING * dt);
+  anim.smoothVelocity += (instantVelocity - anim.smoothVelocity) * vLerp;
+
+  // Направление из визуальной дельты (flipDir инвертирует для правого меха)
+  const rawDir = Math.abs(deltaZ) > MIN_MOVE_THRESHOLD * dt
+    ? (deltaZ < 0 ? 1 : -1)
+    : 0;
+  const dir = rawDir * flipDir;
+
+  if (dir !== 0) {
+    anim.idleTimer = 0;
+
+    if (!anim.walking || anim.strafeDir !== dir) {
+      mech.idleAnim.stop();
+      mech.strafeLeftAnim.stop();
+      mech.strafeRightAnim.stop();
+      playWithBlend(dir > 0 ? mech.strafeRightAnim : mech.strafeLeftAnim);
+      anim.walking = true;
+      anim.strafeDir = dir;
     }
-  } else if (state.leftWalking) {
-    state.leftIdleTimer += dt;
-    if (state.leftIdleTimer > IDLE_DELAY) {
-      obj.leftMech.walkAnim.stop();
-      obj.leftMech.idleAnim.start(true);
-      state.leftWalking = false;
+
+    const activeAnim = anim.strafeDir > 0 ? mech.strafeRightAnim : mech.strafeLeftAnim;
+    activeAnim.speedRatio = clamp(anim.smoothVelocity / ANIM_STRIDE_SPEED, 0.3, 2.0);
+  } else if (anim.walking) {
+    anim.idleTimer += dt;
+    if (anim.idleTimer > IDLE_DELAY) {
+      mech.strafeLeftAnim.stop();
+      mech.strafeRightAnim.stop();
+      playWithBlend(mech.idleAnim, IDLE_BLEND_SPEED);
+      mech.idleAnim.speedRatio = 1;
+      anim.walking = false;
+      anim.strafeDir = 0;
+    } else {
+      // Замедляем анимацию при остановке
+      const activeAnim = anim.strafeDir > 0 ? mech.strafeRightAnim : mech.strafeLeftAnim;
+      activeAnim.speedRatio = clamp(anim.smoothVelocity / ANIM_STRIDE_SPEED, 0.3, 2.0);
     }
   }
 
-  if (leftMoving) {
-    const targetY = dir < 0 ? 0 : Math.PI;
-    obj.leftMech.root.rotation.y = lerpAngle(obj.leftMech.root.rotation.y, targetY, ROTATION_SPEED * dt);
-  } else {
-    obj.leftMech.root.rotation.y = lerpAngle(obj.leftMech.root.rotation.y, LEFT_IDLE_FACING, ROTATION_SPEED * dt);
-  }
-
-  if (rightMoving) {
-    state.rightIdleTimer = 0;
-    if (!state.rightWalking) {
-      obj.rightMech.idleAnim.stop();
-      obj.rightMech.walkAnim.start(true);
-      state.rightWalking = true;
-    }
-  } else if (state.rightWalking) {
-    state.rightIdleTimer += dt;
-    if (state.rightIdleTimer > IDLE_DELAY) {
-      obj.rightMech.walkAnim.stop();
-      obj.rightMech.idleAnim.start(true);
-      state.rightWalking = false;
-    }
-  }
-
-  if (rightMoving) {
-    const rightDir = logic.rightPaddleY > state.prevRightY ? 1 : -1;
-    const targetY = rightDir < 0 ? 0 : Math.PI;
-    obj.rightMech.root.rotation.y = lerpAngle(obj.rightMech.root.rotation.y, targetY, ROTATION_SPEED * dt);
-  } else {
-    obj.rightMech.root.rotation.y = lerpAngle(obj.rightMech.root.rotation.y, RIGHT_IDLE_FACING, ROTATION_SPEED * dt);
-  }
+  anim.prevY = anim.visualZ;
 }
 
-function lerpAngle(from: number, to: number, t: number): number {
-  let diff = to - from;
-  while (diff > Math.PI) diff -= 2 * Math.PI;
-  while (diff < -Math.PI) diff += 2 * Math.PI;
-  return from + diff * Math.min(t, 1);
+function playWithBlend(ag: AnimationGroup, speed = BLEND_SPEED) {
+  ag.enableBlending = true;
+  ag.blendingSpeed = speed;
+  ag.start(true);
+}
+
+function clamp(v: number, min: number, max: number): number {
+  return v < min ? min : v > max ? max : v;
 }
