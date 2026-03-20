@@ -1,8 +1,13 @@
 import type { AnimationGroup } from "@babylonjs/core/Animations/animationGroup";
 import type { Engine } from "@babylonjs/core/Engines/engine";
+import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { Scene } from "@babylonjs/core/scene";
 import type { AppState, MechAnimState } from "./AppState";
 import { ARENA_HEIGHT, PADDLE_HEIGHT } from "./config/gameConfig";
+import {
+  triggerShieldImpact,
+  updateShieldTime,
+} from "./game/EnergyShieldMaterial";
 import type { GameLogic } from "./game/GameLogic";
 import type { GameObjects } from "./game/GameScene";
 import type { InputManager } from "./game/InputManager";
@@ -11,8 +16,6 @@ import type { ZombieManager } from "./game/ZombieManager";
 import { processServerMessages } from "./network/sync";
 import type { WsClient } from "./network/wsClient";
 import type { UIManager } from "./UIManager";
-import { updateShieldTime, triggerShieldImpact } from "./game/EnergyShieldMaterial";
-import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 
 const IDLE_DELAY = 0.1;
 const BLEND_SPEED = 0.06;
@@ -77,12 +80,20 @@ export function startRenderLoop(
       const vehiclePos = objects.vehicle.root.position;
       if (prevBallVx < 0 && currVx > 0) {
         lastHitBy = "left";
-        triggerShieldImpact(objects.leftShieldMat, objects.leftShield,
-          new Vector3(vehiclePos.x, vehiclePos.y, vehiclePos.z), now);
+        triggerShieldImpact(
+          objects.leftShieldMat,
+          objects.leftShield,
+          new Vector3(vehiclePos.x, vehiclePos.y, vehiclePos.z),
+          now,
+        );
       } else if (prevBallVx > 0 && currVx < 0) {
         lastHitBy = "right";
-        triggerShieldImpact(objects.rightShieldMat, objects.rightShield,
-          new Vector3(vehiclePos.x, vehiclePos.y, vehiclePos.z), now);
+        triggerShieldImpact(
+          objects.rightShieldMat,
+          objects.rightShield,
+          new Vector3(vehiclePos.x, vehiclePos.y, vehiclePos.z),
+          now,
+        );
       }
       prevBallVx = currVx;
 
@@ -105,12 +116,17 @@ export function startRenderLoop(
 
 const WHEEL_SPIN_FACTOR = 0.15;
 
-function syncPositions(obj: GameObjects, logic: GameLogic, state: AppState, dt: number) {
+function syncPositions(
+  obj: GameObjects,
+  logic: GameLogic,
+  state: AppState,
+  dt: number,
+) {
   // Vehicle position (sits on ground)
   const root = obj.vehicle.root;
   root.position.x = logic.ball.x;
   root.position.z = -logic.ball.y;
-  root.position.y = 7.5;  // raise so wheels sit on floor (model origin is at center)
+  root.position.y = 7.5; // raise so wheels sit on floor (model origin is at center)
 
   // Vehicle faces movement direction
   const { vx, vy } = logic.ball;
@@ -137,7 +153,8 @@ function syncPositions(obj: GameObjects, logic: GameLogic, state: AppState, dt: 
   state.leftMech.visualZ += (leftShieldZ - state.leftMech.visualZ) * lerpFactor;
   obj.leftMech.root.position.z = state.leftMech.visualZ;
 
-  state.rightMech.visualZ += (rightShieldZ - state.rightMech.visualZ) * lerpFactor;
+  state.rightMech.visualZ +=
+    (rightShieldZ - state.rightMech.visualZ) * lerpFactor;
   obj.rightMech.root.position.z = state.rightMech.visualZ;
 }
 
@@ -156,9 +173,8 @@ function updateStrafeAnim(
   anim.smoothVelocity += (instantVelocity - anim.smoothVelocity) * vLerp;
 
   // Направление из визуальной дельты (flipDir инвертирует для правого меха)
-  const rawDir = Math.abs(deltaZ) > MIN_MOVE_THRESHOLD * dt
-    ? (deltaZ < 0 ? 1 : -1)
-    : 0;
+  const rawDir =
+    Math.abs(deltaZ) > MIN_MOVE_THRESHOLD * dt ? (deltaZ < 0 ? 1 : -1) : 0;
   const dir = rawDir * flipDir;
 
   if (dir !== 0) {
@@ -173,8 +189,13 @@ function updateStrafeAnim(
       anim.strafeDir = dir;
     }
 
-    const activeAnim = anim.strafeDir > 0 ? mech.strafeRightAnim : mech.strafeLeftAnim;
-    activeAnim.speedRatio = clamp(anim.smoothVelocity / ANIM_STRIDE_SPEED, 0.3, 2.0);
+    const activeAnim =
+      anim.strafeDir > 0 ? mech.strafeRightAnim : mech.strafeLeftAnim;
+    activeAnim.speedRatio = clamp(
+      anim.smoothVelocity / ANIM_STRIDE_SPEED,
+      0.3,
+      2.0,
+    );
   } else if (anim.walking) {
     anim.idleTimer += dt;
     if (anim.idleTimer > IDLE_DELAY) {
@@ -186,8 +207,13 @@ function updateStrafeAnim(
       anim.strafeDir = 0;
     } else {
       // Замедляем анимацию при остановке
-      const activeAnim = anim.strafeDir > 0 ? mech.strafeRightAnim : mech.strafeLeftAnim;
-      activeAnim.speedRatio = clamp(anim.smoothVelocity / ANIM_STRIDE_SPEED, 0.3, 2.0);
+      const activeAnim =
+        anim.strafeDir > 0 ? mech.strafeRightAnim : mech.strafeLeftAnim;
+      activeAnim.speedRatio = clamp(
+        anim.smoothVelocity / ANIM_STRIDE_SPEED,
+        0.3,
+        2.0,
+      );
     }
   }
 

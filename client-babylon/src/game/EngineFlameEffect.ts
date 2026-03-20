@@ -1,11 +1,11 @@
-import { Scene } from "@babylonjs/core/scene";
-import { Mesh } from "@babylonjs/core/Meshes/mesh";
-import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
+import { Constants } from "@babylonjs/core/Engines/constants";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { Texture } from "@babylonjs/core/Materials/Textures/texture";
 import { Color3 } from "@babylonjs/core/Maths/math.color";
-import { Constants } from "@babylonjs/core/Engines/constants";
-import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
+import { Mesh } from "@babylonjs/core/Meshes/mesh";
+import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
+import type { TransformNode } from "@babylonjs/core/Meshes/transformNode";
+import type { Scene } from "@babylonjs/core/scene";
 
 const VFX_DIR = "/assets/dragon/vfx/";
 
@@ -39,7 +39,13 @@ export function createEngineFlame(
   const texCache = new Map<string, Texture>();
   for (const cfg of LAYERS) {
     if (!texCache.has(cfg.tex)) {
-      const tex = new Texture(VFX_DIR + cfg.tex, scene, false, true, Texture.BILINEAR_SAMPLINGMODE);
+      const tex = new Texture(
+        VFX_DIR + cfg.tex,
+        scene,
+        false,
+        true,
+        Texture.BILINEAR_SAMPLINGMODE,
+      );
       tex.hasAlpha = true;
       texCache.set(cfg.tex, tex);
     }
@@ -50,9 +56,8 @@ export function createEngineFlame(
     const mat = new StandardMaterial(`engineFlameMat_${i}`, scene);
     mat.diffuseTexture = texCache.get(cfg.tex)!;
     mat.useAlphaFromDiffuseTexture = true;
-    mat.emissiveColor = i < 2
-      ? new Color3(1.0, 0.8, 0.3)
-      : new Color3(1.0, 0.5, 0.1);
+    mat.emissiveColor =
+      i < 2 ? new Color3(1.0, 0.8, 0.3) : new Color3(1.0, 0.5, 0.1);
     mat.disableLighting = true;
     mat.backFaceCulling = false;
     mat.alphaMode = Constants.ALPHA_ADD;
@@ -61,7 +66,11 @@ export function createEngineFlame(
 
   for (let i = 0; i < LAYERS.length; i++) {
     const cfg = LAYERS[i];
-    const plane = MeshBuilder.CreatePlane(`engineFlame_${i}`, { size: 1 }, scene);
+    const plane = MeshBuilder.CreatePlane(
+      `engineFlame_${i}`,
+      { size: 1 },
+      scene,
+    );
     plane.billboardMode = Mesh.BILLBOARDMODE_ALL;
     plane.parent = parentNode;
     plane.position.set(0, 0.2, cfg.offset);
@@ -83,11 +92,13 @@ export function createEngineFlame(
     for (const bb of billboards) {
       const t = elapsed * 4.0 + bb.phaseOffset;
 
-      const scalePulse = 1.0 + Math.sin(t * 3.2) * 0.18 + Math.sin(t * 5.1) * 0.1;
+      const scalePulse =
+        1.0 + Math.sin(t * 3.2) * 0.18 + Math.sin(t * 5.1) * 0.1;
       bb.mesh.scaling.setAll(bb.baseScale * scalePulse);
 
       const mat = bb.mesh.material as StandardMaterial;
-      const flicker = 0.75 + Math.sin(t * 6.3) * 0.15 + Math.sin(t * 10.1) * 0.1;
+      const flicker =
+        0.75 + Math.sin(t * 6.3) * 0.15 + Math.sin(t * 10.1) * 0.1;
       mat.alpha = Math.max(0.35, Math.min(1.0, flicker));
 
       bb.mesh.rotation.z = Math.sin(t * 2.0) * 0.25;

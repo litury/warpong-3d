@@ -1,16 +1,16 @@
-import { ShaderMaterial } from "@babylonjs/core/Materials/shaderMaterial";
-import { Effect } from "@babylonjs/core/Materials/effect";
-import { Matrix, Vector3 } from "@babylonjs/core/Maths/math.vector";
-import { Color3 } from "@babylonjs/core/Maths/math.color";
 import { Constants } from "@babylonjs/core/Engines/constants";
-import type { Scene } from "@babylonjs/core/scene";
+import { Effect } from "@babylonjs/core/Materials/effect";
+import { ShaderMaterial } from "@babylonjs/core/Materials/shaderMaterial";
+import type { Color3 } from "@babylonjs/core/Maths/math.color";
+import { Matrix, Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh";
+import type { Scene } from "@babylonjs/core/scene";
 
 // ---------------------------------------------------------------------------
 // Inline GLSL shaders registered into Babylon's Effect store
 // ---------------------------------------------------------------------------
 
-Effect.ShadersStore["energyShieldVertexShader"] = /* glsl */ `
+Effect.ShadersStore.energyShieldVertexShader = /* glsl */ `
   precision highp float;
 
   // Attributes
@@ -57,7 +57,7 @@ Effect.ShadersStore["energyShieldVertexShader"] = /* glsl */ `
   }
 `;
 
-Effect.ShadersStore["energyShieldFragmentShader"] = /* glsl */ `
+Effect.ShadersStore.energyShieldFragmentShader = /* glsl */ `
   precision highp float;
 
   varying vec3 vLocalPosition;
@@ -176,21 +176,33 @@ export function createEnergyShieldMaterial(
   scene: Scene,
   color: Color3,
 ): ShaderMaterial {
-  const mat = new ShaderMaterial(name, scene, {
-    vertex: "energyShield",
-    fragment: "energyShield",
-  }, {
-    attributes: ["position", "normal", "uv"],
-    uniforms: [
-      "world", "worldView", "worldViewProjection",
-      "uTime", "uColor", "uAlpha",
-      "uFresnelPower", "uHexScale", "uShieldSize",
-      "uImpactPoint", "uImpactTime",
-      "uBendAmount",
-    ],
-    samplers: ["uPatternTex"],
-    needAlphaBlending: true,
-  });
+  const mat = new ShaderMaterial(
+    name,
+    scene,
+    {
+      vertex: "energyShield",
+      fragment: "energyShield",
+    },
+    {
+      attributes: ["position", "normal", "uv"],
+      uniforms: [
+        "world",
+        "worldView",
+        "worldViewProjection",
+        "uTime",
+        "uColor",
+        "uAlpha",
+        "uFresnelPower",
+        "uHexScale",
+        "uShieldSize",
+        "uImpactPoint",
+        "uImpactTime",
+        "uBendAmount",
+      ],
+      samplers: ["uPatternTex"],
+      needAlphaBlending: true,
+    },
+  );
 
   // Default uniform values
   mat.setFloat("uTime", 0);
