@@ -132,8 +132,6 @@ export async function spawnZombie(
   for (const mesh of meshes) {
     mesh.receiveShadows = false;
     if (mesh.material) {
-      const mat = mesh.material as unknown as Record<string, unknown>;
-      mat.unlit = true;
       mesh.material.freeze();
     }
   }

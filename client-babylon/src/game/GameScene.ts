@@ -16,13 +16,13 @@ import { Color3, Color4 } from "@babylonjs/core/Maths/math.color";
 import { Vector2, Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
+import { ParticleSystem } from "@babylonjs/core/Particles/particleSystem";
 import {
   ARENA_HEIGHT,
   ARENA_WIDTH,
   PADDLE_HEIGHT,
   PADDLE_MARGIN,
 } from "../config/gameConfig";
-import { isMobile } from "../utils/platform";
 import { createEnergyShieldMaterial } from "./EnergyShieldMaterial";
 import type { LoadedMech } from "./MechLoader";
 import { loadMech, scaleMechToHeight } from "./MechLoader";
@@ -39,14 +39,14 @@ export interface GameObjects {
   rightShieldMat: ShaderMaterial;
   leftMech: LoadedMech;
   rightMech: LoadedMech;
-  fogPlanes: Mesh[];
+  fogSystems: ParticleSystem[];
 }
 
 export async function createGameScene(engine: Engine): Promise<{
   scene: Scene;
   objects: GameObjects;
   camera: ArcRotateCamera;
-  shadowGen: ShadowGenerator | null;
+  shadowGen: ShadowGenerator;
   updateScoreboard: (left: number, right: number) => void;
 }> {
   const scene = new Scene(engine);
@@ -83,13 +83,10 @@ export async function createGameScene(engine: Engine): Promise<{
   keyLight.intensity = 2.0;
   keyLight.diffuse = new Color3(1, 0.95, 0.9);
 
-  // Shadows from key light (disabled on mobile to save GPU memory)
-  let shadowGen: ShadowGenerator | null = null;
-  if (!isMobile) {
-    shadowGen = new ShadowGenerator(1024, keyLight);
-    shadowGen.useBlurExponentialShadowMap = true;
-    shadowGen.blurKernel = 4;
-  }
+  // Shadows from key light
+  const shadowGen = new ShadowGenerator(1024, keyLight);
+  shadowGen.useBlurExponentialShadowMap = true;
+  shadowGen.blurKernel = 4;
 
   // Fill light — заполняющий свет (ambience всей сцены, снижен чтобы не смывать тени)
   const fillLight = new HemisphericLight("fill", new Vector3(0, 1, 0), scene);
@@ -112,7 +109,7 @@ export async function createGameScene(engine: Engine): Promise<{
   floorMat.diffuseTexture = new Texture("/assets/arena_bg.ktx2", scene);
   floorMat.specularColor = new Color3(0.1, 0.1, 0.1);
   floor.material = floorMat;
-  floor.receiveShadows = !isMobile;
+  floor.receiveShadows = true;
   floor.freezeWorldMatrix();
   floorMat.freeze();
 
@@ -170,13 +167,12 @@ export async function createGameScene(engine: Engine): Promise<{
   rightShield.renderingGroupId = 1; // render after opaque meshes (mechs)
 
   // GlowLayer — bloom only on shields (disabled on mobile to save GPU)
-  if (!isMobile) {
-    const glowLayer = new GlowLayer("glow", scene, { mainTextureSamples: 4 });
-    glowLayer.intensity = 1.0;
-    glowLayer.addIncludedOnlyMesh(leftShield as Mesh);
-    glowLayer.addIncludedOnlyMesh(rightShield as Mesh);
-    for (const m of vehicle.flame.meshes) glowLayer.addIncludedOnlyMesh(m);
-  }
+  // GlowLayer — bloom only on shields
+  const glowLayer = new GlowLayer("glow", scene, { mainTextureSamples: 4 });
+  glowLayer.intensity = 1.0;
+  glowLayer.addIncludedOnlyMesh(leftShield as Mesh);
+  glowLayer.addIncludedOnlyMesh(rightShield as Mesh);
+  for (const m of vehicle.flame.meshes) glowLayer.addIncludedOnlyMesh(m);
 
   // --- Stadium environment ---
   const updateScoreboard = loadStadiumEnvironment(scene);
@@ -195,17 +191,15 @@ export async function createGameScene(engine: Engine): Promise<{
   rightMech.root.rotation.y = -Math.PI / 2;
 
   // Register mech + vehicle meshes as shadow casters
-  if (shadowGen) {
-    for (const mesh of leftMech.meshes) shadowGen.addShadowCaster(mesh);
-    for (const mesh of rightMech.meshes) shadowGen.addShadowCaster(mesh);
-    for (const mesh of vehicle.meshes) shadowGen.addShadowCaster(mesh);
-  }
+  for (const mesh of leftMech.meshes) shadowGen.addShadowCaster(mesh);
+  for (const mesh of rightMech.meshes) shadowGen.addShadowCaster(mesh);
+  for (const mesh of vehicle.meshes) shadowGen.addShadowCaster(mesh);
 
   leftMech.idleAnim.start(true);
   rightMech.idleAnim.start(true);
 
-  // --- Billboard fog at arena edges (zombie spawn zones) ---
-  const fogPlanes = createEdgeFog(scene);
+  // --- Particle fog at arena edges (zombie spawn zones) ---
+  const fogSystems = createEdgeFog(scene);
 
   fitCameraToArena(camera, engine, floor);
   engine.onResizeObservable.add(() => fitCameraToArena(camera, engine, floor));
@@ -222,47 +216,59 @@ export async function createGameScene(engine: Engine): Promise<{
       rightShieldMat,
       leftMech,
       rightMech,
-      fogPlanes,
+      fogSystems,
     },
     updateScoreboard,
   };
 }
 
-function createEdgeFog(scene: Scene): Mesh[] {
-  const fogMat = new StandardMaterial("fogMat", scene);
-  const fogTex = new Texture("/assets/smoke_01.png", scene);
-  fogTex.hasAlpha = true;
-  fogMat.diffuseTexture = fogTex;
-  fogMat.useAlphaFromDiffuseTexture = true;
-  fogMat.disableLighting = true;
-  fogMat.emissiveColor = new Color3(0.3, 0.3, 0.35);
-  fogMat.backFaceCulling = false;
-  fogMat.alpha = 0.5;
+function createEdgeFog(scene: Scene): ParticleSystem[] {
+  const systems: ParticleSystem[] = [];
+  const FOG_X = ARENA_WIDTH / 2 + 30; // 430 — behind mechs
 
-  const FOG_W = 250;
-  const FOG_H = 120;
-  // Place fog planes behind spawn zones (X beyond ±400)
-  const FOG_X = ARENA_WIDTH / 2 + 60; // 460
-  const fogPlanes: Mesh[] = [];
-
-  // 4 planes per side, overlapping along Z to cover arena height
-  const zPositions = [-250, -80, 80, 250];
   for (const side of [-1, 1]) {
-    for (let i = 0; i < zPositions.length; i++) {
-      const plane = MeshBuilder.CreatePlane(
-        `fog_${side > 0 ? "R" : "L"}_${i}`,
-        { width: FOG_W, height: FOG_H },
-        scene,
-      );
-      plane.material = fogMat;
-      plane.position.set(side * FOG_X, FOG_H / 2 - 10, zPositions[i]);
-      // billboardMode needs a LIVE world matrix — do NOT freezeWorldMatrix
-      plane.billboardMode = Mesh.BILLBOARDMODE_Y;
-      fogPlanes.push(plane);
-    }
+    const ps = new ParticleSystem(`fog_${side > 0 ? "R" : "L"}`, 300, scene);
+    ps.particleTexture = new Texture("/assets/smoke_01.png", scene);
+
+    // Box emitter: full arena height wall behind mech
+    ps.createBoxEmitter(
+      new Vector3(-0.1, 0.02, -0.1), // direction1 — barely drifts
+      new Vector3(0.1, 0.08, 0.1), // direction2
+      new Vector3(-30, 0, -ARENA_HEIGHT / 2), // minEmitBox — full arena height
+      new Vector3(30, 10, ARENA_HEIGHT / 2), // maxEmitBox
+    );
+
+    // Position emitter behind each mech
+    ps.emitter = new Vector3(side * FOG_X, 0, 0);
+    ps.minEmitPower = 0.02;
+    ps.maxEmitPower = 0.1;
+
+    // emitRate=30, avgLife=5s → ~150 particles alive = dense wall
+    ps.minSize = 80;
+    ps.maxSize = 150;
+    ps.minLifeTime = 4;
+    ps.maxLifeTime = 6;
+    ps.emitRate = 30;
+    ps.minAngularSpeed = 0.01;
+    ps.maxAngularSpeed = 0.06;
+    ps.blendMode = ParticleSystem.BLENDMODE_STANDARD;
+
+    // Color gradient: thick enough to fully hide zombie spawns
+    ps.addColorGradient(0, new Color4(0.5, 0.55, 0.7, 0));
+    ps.addColorGradient(0.08, new Color4(0.5, 0.55, 0.7, 0.6));
+    ps.addColorGradient(0.92, new Color4(0.5, 0.55, 0.7, 0.6));
+    ps.addColorGradient(1.0, new Color4(0.5, 0.55, 0.7, 0));
+
+    // Size gradient: large particles for heavy overlap
+    ps.addSizeGradient(0, 80);
+    ps.addSizeGradient(0.5, 120);
+    ps.addSizeGradient(1.0, 150);
+
+    ps.start();
+    systems.push(ps);
   }
 
-  return fogPlanes;
+  return systems;
 }
 
 function loadStadiumEnvironment(
