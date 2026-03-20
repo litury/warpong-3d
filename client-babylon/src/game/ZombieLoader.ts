@@ -1,10 +1,10 @@
-import { Scene } from "@babylonjs/core/scene";
-import { SceneLoader } from "@babylonjs/core/Loading/sceneLoader";
-import { AssetContainer } from "@babylonjs/core/assetContainer";
 import { AnimationGroup } from "@babylonjs/core/Animations/animationGroup";
-import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
+import type { AssetContainer } from "@babylonjs/core/assetContainer";
+import type { Skeleton } from "@babylonjs/core/Bones/skeleton";
+import { LoadAssetContainerAsync } from "@babylonjs/core/Loading/sceneLoader";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
-import { Skeleton } from "@babylonjs/core/Bones/skeleton";
+import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
+import type { Scene } from "@babylonjs/core/scene";
 import "@babylonjs/loaders/glTF";
 
 export interface ZombieInstance {
@@ -37,9 +37,15 @@ const SIDE_MODEL: Record<string, string> = {
 };
 
 const ALL_ANIMS = [
-  "walk", "walk_alt1", "walk_alt2",
-  "attack", "attack_alt1", "attack_alt2",
-  "die", "die_alt1", "die_alt2",
+  "walk",
+  "walk_alt1",
+  "walk_alt2",
+  "attack",
+  "attack_alt1",
+  "attack_alt2",
+  "die",
+  "die_alt1",
+  "die_alt2",
   "scream",
 ];
 
@@ -51,11 +57,16 @@ function pickRandom<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-async function ensureModelContainer(scene: Scene, side: "left" | "right"): Promise<AssetContainer> {
+async function ensureModelContainer(
+  scene: Scene,
+  side: "left" | "right",
+): Promise<AssetContainer> {
   const fileName = SIDE_MODEL[side];
   const cached = modelContainers.get(fileName);
   if (cached) return cached;
-  const container = await SceneLoader.LoadAssetContainerAsync(MODEL_DIR, fileName, scene);
+  const container = await LoadAssetContainerAsync(fileName, scene, {
+    rootUrl: MODEL_DIR,
+  });
   // Удалить встроенные lights из GLB — они клонируются при каждом instantiate
   for (const light of container.lights) light.dispose();
   container.lights.length = 0;
@@ -67,14 +78,19 @@ export async function preloadZombieAssets(scene: Scene): Promise<void> {
   await Promise.all([
     ensureModelContainer(scene, "left"),
     ensureModelContainer(scene, "right"),
-    ...ALL_ANIMS.map(name => ensureAnimContainer(scene, name)),
+    ...ALL_ANIMS.map((name) => ensureAnimContainer(scene, name)),
   ]);
 }
 
-async function ensureAnimContainer(scene: Scene, animName: string): Promise<AssetContainer> {
+async function ensureAnimContainer(
+  scene: Scene,
+  animName: string,
+): Promise<AssetContainer> {
   const cached = animContainerCache.get(animName);
   if (cached) return cached;
-  const container = await SceneLoader.LoadAssetContainerAsync(ANIMS_DIR, `${animName}.glb`, scene);
+  const container = await LoadAssetContainerAsync(`${animName}.glb`, scene, {
+    rootUrl: ANIMS_DIR,
+  });
   // Strip mesh/material/texture data — we only need animation groups.
   // Anim GLBs contain the full model mesh+textures which waste ~100MB+ of GPU memory.
   for (const tex of container.textures) tex.dispose();
@@ -89,12 +105,15 @@ async function ensureAnimContainer(scene: Scene, animName: string): Promise<Asse
   return container;
 }
 
-export async function spawnZombie(scene: Scene, side: "left" | "right" = "left"): Promise<ZombieInstance> {
+export async function spawnZombie(
+  scene: Scene,
+  side: "left" | "right" = "left",
+): Promise<ZombieInstance> {
   const c = await ensureModelContainer(scene, side);
   const id = zombieCounter++;
   const prefix = `zombie_${id}`;
 
-  const inst = c.instantiateModelsToScene(name => `${prefix}_${name}`, true);
+  const inst = c.instantiateModelsToScene((name) => `${prefix}_${name}`, true);
 
   // Wrap GLB root in a parent so rotation is not overridden by animations
   const glbRoot = inst.rootNodes[0] as TransformNode;
@@ -113,7 +132,7 @@ export async function spawnZombie(scene: Scene, side: "left" | "right" = "left")
   for (const mesh of meshes) {
     mesh.receiveShadows = false;
     if (mesh.material) {
-      const mat = mesh.material as any;
+      const mat = mesh.material as unknown as Record<string, unknown>;
       mat.unlit = true;
       mesh.material.freeze();
     }
@@ -130,7 +149,9 @@ export async function spawnZombie(scene: Scene, side: "left" | "right" = "left")
 
   const anims = new Map<string, AnimationGroup>();
 
-  async function loadAnimForInstance(animName: string): Promise<AnimationGroup> {
+  async function loadAnimForInstance(
+    animName: string,
+  ): Promise<AnimationGroup> {
     const existing = anims.get(animName);
     if (existing) return existing;
 
@@ -147,10 +168,21 @@ export async function spawnZombie(scene: Scene, side: "left" | "right" = "left")
 
       // Skip root bone position & rotation for non-death anims — movement is driven by game logic.
       // Death anims need root bone to move the body to the ground.
-      const isRootBone = sourceBoneName === "Armature" || sourceBoneName.includes("Hips");
+      const isRootBone =
+        sourceBoneName === "Armature" || sourceBoneName.includes("Hips");
       const isDeathAnim = animName.startsWith("die");
-      if (isRootBone && !isDeathAnim && ta.animation.targetProperty === "position") continue;
-      if (isRootBone && !isDeathAnim && ta.animation.targetProperty === "rotationQuaternion") continue;
+      if (
+        isRootBone &&
+        !isDeathAnim &&
+        ta.animation.targetProperty === "position"
+      )
+        continue;
+      if (
+        isRootBone &&
+        !isDeathAnim &&
+        ta.animation.targetProperty === "rotationQuaternion"
+      )
+        continue;
 
       retargetedAg.addTargetedAnimation(ta.animation, targetNode);
     }
@@ -170,20 +202,43 @@ export async function spawnZombie(scene: Scene, side: "left" | "right" = "left")
   const dieAltKey = pickRandom(DIE_VARIANTS);
 
   return {
-    root, meshes, skeleton, anims,
-    get walkAnim() { return anims.get("walk")!; },
-    get monsterWalkAnim() { return anims.get(walkKey)!; },
-    get injuredWalkAnim() { return anims.get(walkAltKey)!; },
-    get attackAnim() { return anims.get("attack")!; },
-    get punchComboAnim() { return anims.get(attackAltKey)!; },
-    get dieAnim() { return anims.get("die")!; },
-    get dyingBackwardsAnim() { return anims.get(dieAltKey)!; },
-    get screamAnim() { return anims.get("scream")!; },
+    root,
+    meshes,
+    skeleton,
+    anims,
+    get walkAnim() {
+      return anims.get("walk")!;
+    },
+    get monsterWalkAnim() {
+      return anims.get(walkKey)!;
+    },
+    get injuredWalkAnim() {
+      return anims.get(walkAltKey)!;
+    },
+    get attackAnim() {
+      return anims.get("attack")!;
+    },
+    get punchComboAnim() {
+      return anims.get(attackAltKey)!;
+    },
+    get dieAnim() {
+      return anims.get("die")!;
+    },
+    get dyingBackwardsAnim() {
+      return anims.get(dieAltKey)!;
+    },
+    get screamAnim() {
+      return anims.get("scream")!;
+    },
   };
 }
 
-export function scaleZombieToHeight(zombie: ZombieInstance, targetHeight: number) {
-  let minY = Infinity, maxY = -Infinity;
+export function scaleZombieToHeight(
+  zombie: ZombieInstance,
+  targetHeight: number,
+) {
+  let minY = Infinity,
+    maxY = -Infinity;
   for (const mesh of zombie.meshes) {
     mesh.computeWorldMatrix(true);
     const bounds = mesh.getBoundingInfo();
@@ -222,18 +277,24 @@ function root_setEnabled(root: TransformNode, enabled: boolean) {
 }
 
 export function disposeZombie(zombie: ZombieInstance) {
-  for (const ag of zombie.anims.values()) { ag.stop(); ag.dispose(); }
+  for (const ag of zombie.anims.values()) {
+    ag.stop();
+    ag.dispose();
+  }
   for (const mesh of zombie.meshes) mesh.dispose();
   if (zombie.skeleton) zombie.skeleton.dispose();
-  zombie.root.getChildTransformNodes(false).forEach(n => n.dispose());
+  for (const n of zombie.root.getChildTransformNodes(false)) n.dispose();
   zombie.root.dispose();
 }
 
 /** Dispose skeleton, animations, and transform nodes but NOT meshes (already consumed by MergeMeshes). */
 export function disposeZombieAnimsOnly(zombie: ZombieInstance) {
-  for (const ag of zombie.anims.values()) { ag.stop(); ag.dispose(); }
+  for (const ag of zombie.anims.values()) {
+    ag.stop();
+    ag.dispose();
+  }
   if (zombie.skeleton) zombie.skeleton.dispose();
-  zombie.root.getChildTransformNodes(false).forEach(n => n.dispose());
+  for (const n of zombie.root.getChildTransformNodes(false)) n.dispose();
   zombie.root.dispose();
 }
 

@@ -1,11 +1,11 @@
-import { Scene } from "@babylonjs/core/scene";
-import { SceneLoader } from "@babylonjs/core/Loading/sceneLoader";
-import { AssetContainer } from "@babylonjs/core/assetContainer";
-import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
+import type { AssetContainer } from "@babylonjs/core/assetContainer";
+import { LoadAssetContainerAsync } from "@babylonjs/core/Loading/sceneLoader";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
+import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
+import type { Scene } from "@babylonjs/core/scene";
 import "@babylonjs/loaders/glTF";
-import { createEngineFlame } from "./EngineFlameEffect";
 import type { EngineFlame } from "./EngineFlameEffect";
+import { createEngineFlame } from "./EngineFlameEffect";
 
 export interface LoadedVehicle {
   root: TransformNode;
@@ -19,13 +19,18 @@ let vehicleContainer: AssetContainer | null = null;
 
 async function ensureContainer(scene: Scene): Promise<AssetContainer> {
   if (vehicleContainer) return vehicleContainer;
-  vehicleContainer = await SceneLoader.LoadAssetContainerAsync(MODEL_DIR, "model_retextured.glb", scene);
+  vehicleContainer = await LoadAssetContainerAsync("model.glb", scene, {
+    rootUrl: MODEL_DIR,
+  });
   return vehicleContainer;
 }
 
 export async function loadVehicle(scene: Scene): Promise<LoadedVehicle> {
   const container = await ensureContainer(scene);
-  const inst = container.instantiateModelsToScene(name => `vehicle_${name}`, false);
+  const inst = container.instantiateModelsToScene(
+    (name) => `vehicle_${name}`,
+    false,
+  );
 
   const glbRoot = inst.rootNodes[0] as TransformNode;
   const root = new TransformNode("vehicle_wrapper", scene);
@@ -50,7 +55,10 @@ export async function loadVehicle(scene: Scene): Promise<LoadedVehicle> {
 
   // Dispose any lights that came with the GLB
   for (const light of inst.rootNodes) {
-    if ((light as any).intensity !== undefined && !(light instanceof TransformNode)) {
+    if (
+      (light as unknown as Record<string, unknown>).intensity !== undefined &&
+      !(light instanceof TransformNode)
+    ) {
       light.dispose();
     }
   }
@@ -59,7 +67,7 @@ export async function loadVehicle(scene: Scene): Promise<LoadedVehicle> {
   for (const mesh of meshes) {
     mesh.receiveShadows = true;
     if (mesh.material) {
-      const mat = mesh.material as any;
+      const mat = mesh.material as unknown as Record<string, unknown>;
       if (mat.usePhysicalLightFalloff !== undefined) {
         mat.usePhysicalLightFalloff = false;
       }

@@ -1,10 +1,10 @@
-import { Scene } from "@babylonjs/core/scene";
-import { SceneLoader } from "@babylonjs/core/Loading/sceneLoader";
-import { AssetContainer } from "@babylonjs/core/assetContainer";
 import { AnimationGroup } from "@babylonjs/core/Animations/animationGroup";
-import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
+import type { AssetContainer } from "@babylonjs/core/assetContainer";
+import type { Skeleton } from "@babylonjs/core/Bones/skeleton";
+import { LoadAssetContainerAsync } from "@babylonjs/core/Loading/sceneLoader";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
-import { Skeleton } from "@babylonjs/core/Bones/skeleton";
+import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
+import type { Scene } from "@babylonjs/core/scene";
 import "@babylonjs/loaders/glTF";
 
 export interface LoadedMech {
@@ -32,17 +32,25 @@ const animContainerCache = new Map<string, AssetContainer>();
 
 async function ensureModelContainer(scene: Scene): Promise<AssetContainer> {
   if (modelContainer) return modelContainer;
-  modelContainer = await SceneLoader.LoadAssetContainerAsync(MODEL_DIR, "model.glb", scene);
+  const container = await LoadAssetContainerAsync("model.glb", scene, {
+    rootUrl: MODEL_DIR,
+  });
   // Удалить встроенные lights из GLB
-  for (const light of modelContainer.lights) light.dispose();
-  modelContainer.lights.length = 0;
-  return modelContainer;
+  for (const light of container.lights) light.dispose();
+  container.lights.length = 0;
+  modelContainer = container;
+  return container;
 }
 
-async function ensureAnimContainer(scene: Scene, animName: string): Promise<AssetContainer> {
+async function ensureAnimContainer(
+  scene: Scene,
+  animName: string,
+): Promise<AssetContainer> {
   const cached = animContainerCache.get(animName);
   if (cached) return cached;
-  const container = await SceneLoader.LoadAssetContainerAsync(ANIMS_DIR, `${animName}.glb`, scene);
+  const container = await LoadAssetContainerAsync(`${animName}.glb`, scene, {
+    rootUrl: ANIMS_DIR,
+  });
   animContainerCache.set(animName, container);
   return container;
 }
@@ -58,7 +66,7 @@ export async function loadMech(
   preloadAnims: string[] = ["idle", "strafe_right", "strafe_left"],
 ): Promise<LoadedMech> {
   const c = await ensureModelContainer(scene);
-  const inst = c.instantiateModelsToScene(n => `${name}_${n}`, false);
+  const inst = c.instantiateModelsToScene((n) => `${name}_${n}`, false);
 
   const glbRoot = inst.rootNodes[0] as TransformNode;
   const root = new TransformNode(`${name}_wrapper`, scene);
@@ -74,7 +82,7 @@ export async function loadMech(
 
   for (const mesh of meshes) {
     if (mesh.material) {
-      const mat = mesh.material as any;
+      const mat = mesh.material as unknown as Record<string, unknown>;
       if (mat.usePhysicalLightFalloff !== undefined) {
         mat.usePhysicalLightFalloff = false;
       }
@@ -94,7 +102,9 @@ export async function loadMech(
   }
 
   // Helper: load animation from separate GLB and retarget onto this instance's skeleton
-  async function loadAnimForInstance(animName: string): Promise<AnimationGroup> {
+  async function loadAnimForInstance(
+    animName: string,
+  ): Promise<AnimationGroup> {
     const existing = anims.get(animName);
     if (existing) return existing;
 
@@ -111,7 +121,8 @@ export async function loadMech(
       if (!targetNode) continue;
 
       // Skip root motion translation (Hips/Armature) — position is driven by game logic
-      const isRootBone = sourceBoneName.includes("Hips") || sourceBoneName === "Armature";
+      const isRootBone =
+        sourceBoneName.includes("Hips") || sourceBoneName === "Armature";
       if (isRootBone && ta.animation.targetProperty === "position") continue;
 
       retargetedAg.addTargetedAnimation(ta.animation.clone(), targetNode);
@@ -146,7 +157,8 @@ export async function loadMech(
 }
 
 export function scaleMechToHeight(mech: LoadedMech, targetHeight: number) {
-  let minY = Infinity, maxY = -Infinity;
+  let minY = Infinity,
+    maxY = -Infinity;
   for (const mesh of mech.meshes) {
     mesh.computeWorldMatrix(true);
     const bounds = mesh.getBoundingInfo();
