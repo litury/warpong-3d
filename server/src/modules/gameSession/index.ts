@@ -1,6 +1,6 @@
 export {
   GameSession,
+  type PlayerData,
   STAKE,
   STAKE_COMMISSION,
-  type PlayerData,
 } from "./gameSession";

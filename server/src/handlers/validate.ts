@@ -83,7 +83,8 @@ export function validateMessage(raw: unknown): ClientMessage | null {
       return { type: "PurchaseCoins", productId: obj.productId };
 
     case "Reconnect":
-      if (typeof obj.sessionToken !== "string" || obj.sessionToken === "") return null;
+      if (typeof obj.sessionToken !== "string" || obj.sessionToken === "")
+        return null;
       return { type: "Reconnect", sessionToken: obj.sessionToken };
 
     default:

@@ -9,7 +9,7 @@ import type {
   ServerMessage,
 } from "../../shared";
 import { settleGame } from "../db";
-import { type SimulationState, createInitialState, tick } from "./parts";
+import { createInitialState, type SimulationState, tick } from "./parts";
 
 export interface PlayerConnection {
   ws: ServerWebSocket<PlayerData>;
@@ -170,7 +170,11 @@ export class GameSession {
 
     // Notify opponent that game is paused
     const secondsLeft = Math.ceil(GRACE_PERIOD_MS / 1000);
-    this.send(opponent, { type: "GamePaused", reason: "opponent_disconnected", secondsLeft });
+    this.send(opponent, {
+      type: "GamePaused",
+      reason: "opponent_disconnected",
+      secondsLeft,
+    });
     this.graceStartedAt = Date.now();
 
     // Send countdown updates every second
@@ -178,7 +182,11 @@ export class GameSession {
       const elapsed = Date.now() - this.graceStartedAt;
       const remaining = Math.ceil((GRACE_PERIOD_MS - elapsed) / 1000);
       if (remaining > 0) {
-        this.send(opponent, { type: "GamePaused", reason: "opponent_disconnected", secondsLeft: remaining });
+        this.send(opponent, {
+          type: "GamePaused",
+          reason: "opponent_disconnected",
+          secondsLeft: remaining,
+        });
       }
     }, 1000);
 
@@ -188,7 +196,11 @@ export class GameSession {
     }, GRACE_PERIOD_MS);
   }
 
-  handleReconnect(playerId: string, sessionToken: string, newWs: ServerWebSocket<PlayerData>): boolean {
+  handleReconnect(
+    playerId: string,
+    sessionToken: string,
+    newWs: ServerWebSocket<PlayerData>,
+  ): boolean {
     // Validate token matches player
     const isLeft = playerId === this.leftPlayer.data.playerId;
     const expectedToken = isLeft ? this.leftToken : this.rightToken;
@@ -276,9 +288,16 @@ export class GameSession {
     const disconnected =
       this.disconnectedSide === "Left" ? this.leftPlayer : this.rightPlayer;
 
-    const { winReward, winnerNewCoins } = this.rewardPlayers(opponent, disconnected);
+    const { winReward, winnerNewCoins } = this.rewardPlayers(
+      opponent,
+      disconnected,
+    );
 
-    this.send(opponent, { type: "OpponentDisconnected", reward: winReward, coins: winnerNewCoins });
+    this.send(opponent, {
+      type: "OpponentDisconnected",
+      reward: winReward,
+      coins: winnerNewCoins,
+    });
     this.disconnectedSide = null;
     this.stop();
   }

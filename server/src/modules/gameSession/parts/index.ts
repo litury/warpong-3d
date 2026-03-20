@@ -1,7 +1,7 @@
-export { checkWallCollisions, checkPaddleCollision } from "./collision";
+export { checkPaddleCollision, checkWallCollisions } from "./collision";
 export {
   createInitialState,
-  tick,
   type SimulationState,
   type TickResult,
+  tick,
 } from "./simulation";

@@ -1,6 +1,6 @@
 import type { ServerWebSocket } from "bun";
-import { getPlayer, updateCosmetics } from "../modules/db";
 import type { PlayerRecord } from "../modules/db";
+import { getPlayer, updateCosmetics } from "../modules/db";
 import type { PlayerData } from "../modules/gameSession";
 import type { ClientMessage } from "../shared";
 

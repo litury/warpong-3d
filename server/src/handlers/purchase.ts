@@ -1,7 +1,7 @@
 import type { ServerWebSocket } from "bun";
 import { CATALOG } from "../catalog";
-import { addCoins, getPlayer, updateUpgrades } from "../modules/db";
 import type { PlayerRecord } from "../modules/db";
+import { addCoins, getPlayer, updateUpgrades } from "../modules/db";
 import type { PlayerData } from "../modules/gameSession";
 import type { ClientMessage } from "../shared";
 

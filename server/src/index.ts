@@ -8,8 +8,13 @@ import {
   handleRewardCoins,
 } from "./handlers/purchase";
 import { validateMessage } from "./handlers/validate";
-import { getOrCreatePlayer, getPlayer, reserveStake, releaseStake } from "./modules/db";
 import type { PlayerRecord } from "./modules/db";
+import {
+  getOrCreatePlayer,
+  getPlayer,
+  releaseStake,
+  reserveStake,
+} from "./modules/db";
 import type { PlayerData } from "./modules/gameSession";
 import { STAKE } from "./modules/gameSession";
 import { Matchmaking } from "./modules/matchmaking";
@@ -204,7 +209,12 @@ Bun.serve<PlayerData>({
 
         case "BuyUpgrade":
           if (ws.data.stakeReserved) {
-            ws.send(JSON.stringify({ type: "Error", message: "cannot buy upgrades during matchmaking" }));
+            ws.send(
+              JSON.stringify({
+                type: "Error",
+                message: "cannot buy upgrades during matchmaking",
+              }),
+            );
             break;
           }
           handleBuyUpgrade(ws, msg, sendPlayerSync);
@@ -225,7 +235,9 @@ Bun.serve<PlayerData>({
         case "Reconnect": {
           const ok = matchmaking.tryReconnect(ws, msg.sessionToken);
           if (!ok) {
-            ws.send(JSON.stringify({ type: "Error", message: "reconnect failed" }));
+            ws.send(
+              JSON.stringify({ type: "Error", message: "reconnect failed" }),
+            );
           }
           break;
         }

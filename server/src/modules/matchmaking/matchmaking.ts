@@ -1,11 +1,11 @@
 import type { ServerWebSocket } from "bun";
 import { GameSession, type PlayerData } from "../gameSession";
 
-const BASE_RANGE = 200;                // ±200 MMR initially
-const RANGE_EXPAND_STEP = 100;         // +100 MMR per interval
-const RANGE_EXPAND_INTERVAL = 10_000;  // every 10 seconds
-const QUEUE_TIMEOUT = 5 * 60_000;      // 5 minutes
-const TICK_INTERVAL = 2_000;           // check matches every 2s
+const BASE_RANGE = 200; // ±200 MMR initially
+const RANGE_EXPAND_STEP = 100; // +100 MMR per interval
+const RANGE_EXPAND_INTERVAL = 10_000; // every 10 seconds
+const QUEUE_TIMEOUT = 5 * 60_000; // 5 minutes
+const TICK_INTERVAL = 2_000; // check matches every 2s
 
 interface QueueEntry {
   ws: ServerWebSocket<PlayerData>;
@@ -17,7 +17,6 @@ export class Matchmaking {
   private queue: QueueEntry[] = [];
   private sessions = new Map<string, GameSession>();
   private playerSession = new Map<string, string>();
-  private tickTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
     this.tickTimer = setInterval(() => this.tick(), TICK_INTERVAL);
@@ -85,20 +84,27 @@ export class Matchmaking {
       .filter((o) => o !== entry)
       .reduce((min, o) => Math.min(min, Math.abs(o.mmr - entry.mmr)), Infinity);
 
-    if (!isFinite(closestDist)) return 30; // nobody else in queue
+    if (!Number.isFinite(closestDist)) return 30; // nobody else in queue
 
-    const expansionsNeeded = Math.max(0, Math.ceil((closestDist - range) / RANGE_EXPAND_STEP));
+    const expansionsNeeded = Math.max(
+      0,
+      Math.ceil((closestDist - range) / RANGE_EXPAND_STEP),
+    );
     return Math.ceil((expansionsNeeded * RANGE_EXPAND_INTERVAL) / 1000);
   }
 
   private sendQueueStatus(entry: QueueEntry): void {
     try {
-      entry.ws.send(JSON.stringify({
-        type: "QueueStatus",
-        estimatedWaitSec: this.estimateWaitSec(entry),
-        rangeWidth: this.getAllowedRange(entry),
-      }));
-    } catch { /* disconnected */ }
+      entry.ws.send(
+        JSON.stringify({
+          type: "QueueStatus",
+          estimatedWaitSec: this.estimateWaitSec(entry),
+          rangeWidth: this.getAllowedRange(entry),
+        }),
+      );
+    } catch {
+      /* disconnected */
+    }
   }
 
   private tick(): void {
@@ -114,7 +120,11 @@ export class Matchmaking {
       return true;
     });
     for (const e of timedOut) {
-      try { e.ws.send(JSON.stringify({ type: "QueueTimeout" })); } catch { /* dc */ }
+      try {
+        e.ws.send(JSON.stringify({ type: "QueueTimeout" }));
+      } catch {
+        /* dc */
+      }
     }
 
     this.tryMatch();
