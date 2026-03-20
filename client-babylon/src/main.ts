@@ -1,22 +1,28 @@
 import { Engine } from "@babylonjs/core/Engines/engine";
 import "@babylonjs/core/Misc/khronosTextureContainer2";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
-import { createGameScene } from "./game/GameScene";
+import { AppState } from "./AppState";
+import { triggerShieldImpact } from "./game/EnergyShieldMaterial";
 import { GameLogic } from "./game/GameLogic";
+import { createGameScene } from "./game/GameScene";
 import { InputManager } from "./game/InputManager";
+import { preloadZombieAssets } from "./game/ZombieLoader";
 import { ZombieManager } from "./game/ZombieManager";
 import { WsClient } from "./network/wsClient";
-import { AppState } from "./AppState";
-import { queryUIElements, UIManager } from "./UIManager";
 import { startRenderLoop } from "./RenderLoop";
-import { triggerShieldImpact } from "./game/EnergyShieldMaterial";
-import { preloadZombieAssets } from "./game/ZombieLoader";
+import { queryUIElements, UIManager } from "./UIManager";
+import { isMobile } from "./utils/platform";
 
 const canvas = document.getElementById("renderCanvas") as HTMLCanvasElement;
 
 async function main() {
-  const engine = new Engine(canvas, true, { stencil: true });
-  const { scene, objects, shadowGen, updateScoreboard } = await createGameScene(engine);
+  const engine = new Engine(canvas, !isMobile, { stencil: true });
+
+  if (isMobile) {
+    engine.setHardwareScalingLevel(2);
+  }
+  const { scene, objects, shadowGen, updateScoreboard } =
+    await createGameScene(engine);
 
   const state = new AppState();
   const logic = new GameLogic();
@@ -42,7 +48,12 @@ async function main() {
   logic.onPaddleHit = (isRight, hitY) => {
     const mat = isRight ? objects.rightShieldMat : objects.leftShieldMat;
     const shield = isRight ? objects.rightShield : objects.leftShield;
-    triggerShieldImpact(mat, shield, new Vector3(shield.position.x, 7.5, -hitY), performance.now() / 1000);
+    triggerShieldImpact(
+      mat,
+      shield,
+      new Vector3(shield.position.x, 7.5, -hitY),
+      performance.now() / 1000,
+    );
   };
 
   logic.onScore = () => ui.updateScore(logic);
@@ -65,9 +76,26 @@ async function main() {
 
   zombieManager.onZombieKilled = () => ui.updateCoins(zombieManager);
 
-  ui.bindMenuButtons({ state, logic, ws, zombieManager, onStartGame: startGame });
+  ui.bindMenuButtons({
+    state,
+    logic,
+    ws,
+    zombieManager,
+    onStartGame: startGame,
+  });
 
-  startRenderLoop(engine, scene, objects, logic, input, ws, zombieManager, ui, state, startGame);
+  startRenderLoop(
+    engine,
+    scene,
+    objects,
+    logic,
+    input,
+    ws,
+    zombieManager,
+    ui,
+    state,
+    startGame,
+  );
 
   window.addEventListener("resize", () => engine.resize());
 }
