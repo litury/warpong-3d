@@ -235,18 +235,18 @@ function createEdgeFog(scene: Scene): Mesh[] {
   fogMat.diffuseTexture = fogTex;
   fogMat.useAlphaFromDiffuseTexture = true;
   fogMat.disableLighting = true;
-  fogMat.emissiveColor = new Color3(0.15, 0.15, 0.2);
+  fogMat.emissiveColor = new Color3(0.3, 0.3, 0.35);
   fogMat.backFaceCulling = false;
   fogMat.alpha = 0.5;
 
-  const FOG_W = 200;
-  const FOG_H = 80;
+  const FOG_W = 250;
+  const FOG_H = 120;
   // Place fog planes behind spawn zones (X beyond ±400)
-  const FOG_X = ARENA_WIDTH / 2 + 60; // 460 — well behind spawn point at ±330
+  const FOG_X = ARENA_WIDTH / 2 + 60; // 460
   const fogPlanes: Mesh[] = [];
 
-  // 3 planes per side, spread along Z to cover arena height
-  const zPositions = [-200, 0, 200];
+  // 4 planes per side, overlapping along Z to cover arena height
+  const zPositions = [-250, -80, 80, 250];
   for (const side of [-1, 1]) {
     for (let i = 0; i < zPositions.length; i++) {
       const plane = MeshBuilder.CreatePlane(
@@ -256,8 +256,8 @@ function createEdgeFog(scene: Scene): Mesh[] {
       );
       plane.material = fogMat;
       plane.position.set(side * FOG_X, FOG_H / 2 - 10, zPositions[i]);
+      // billboardMode needs a LIVE world matrix — do NOT freezeWorldMatrix
       plane.billboardMode = Mesh.BILLBOARDMODE_Y;
-      plane.freezeWorldMatrix();
       fogPlanes.push(plane);
     }
   }

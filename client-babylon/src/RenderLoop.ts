@@ -1,6 +1,7 @@
 import type { AnimationGroup } from "@babylonjs/core/Animations/animationGroup";
 import type { Engine } from "@babylonjs/core/Engines/engine";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
+import type { Mesh } from "@babylonjs/core/Meshes/mesh";
 import type { Scene } from "@babylonjs/core/scene";
 import type { AppState, MechAnimState } from "./AppState";
 import { ARENA_HEIGHT, PADDLE_HEIGHT } from "./config/gameConfig";
@@ -108,6 +109,9 @@ export function startRenderLoop(
         zombieManager.checkBallCollisions(logic.ball.x, ballZ, lastHitBy);
       }
     }
+
+    // Animate fog drift (slow UV offset on fog billboard textures)
+    animateFog(objects.fogPlanes, now);
 
     ui.updateFps(engine.getFps());
     scene.render();
@@ -228,4 +232,17 @@ function playWithBlend(ag: AnimationGroup, speed = BLEND_SPEED) {
 
 function clamp(v: number, min: number, max: number): number {
   return v < min ? min : v > max ? max : v;
+}
+
+function animateFog(fogPlanes: Mesh[], now: number) {
+  for (let i = 0; i < fogPlanes.length; i++) {
+    const plane = fogPlanes[i];
+    const mat = plane.material;
+    if (!mat) continue;
+    const tex = (mat as { diffuseTexture?: { uOffset: number } })
+      .diffuseTexture;
+    if (!tex) continue;
+    // Each plane drifts at a slightly different speed for variety
+    tex.uOffset = Math.sin(now * 0.03 + i * 1.7) * 0.15;
+  }
 }
