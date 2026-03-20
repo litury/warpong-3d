@@ -1,5 +1,6 @@
 import type { AppState } from "./AppState";
 import type { GameLogic } from "./game/GameLogic";
+import type { SoundManager } from "./game/soundManager";
 import type { ZombieManager } from "./game/ZombieManager";
 import type { WsClient } from "./network/wsClient";
 
@@ -37,6 +38,7 @@ export class UIManager {
   constructor(
     private ui: UIElements,
     private updateScoreboard: (left: number, right: number) => void,
+    private sound: SoundManager,
   ) {}
 
   hideLoading() {
@@ -123,11 +125,13 @@ export class UIManager {
     onStartGame: () => void;
   }) {
     this.ui.btnSolo.addEventListener("click", () => {
+      this.sound.play("uiClick");
       deps.state.mode = "solo";
       deps.onStartGame();
     });
 
     this.ui.btnOnline.addEventListener("click", () => {
+      this.sound.play("uiClick");
       deps.state.mode = "online";
       deps.state.playerSide = null;
       this.showConnecting();
@@ -135,6 +139,7 @@ export class UIManager {
     });
 
     this.ui.btnRestart.addEventListener("click", () => {
+      this.sound.play("uiClick");
       this.hideGameOver();
       if (deps.state.mode === "online") {
         deps.ws.close();
@@ -142,6 +147,7 @@ export class UIManager {
       deps.logic.restart();
       deps.zombieManager.restart();
       deps.state.resetToMenu();
+      this.sound.playMusic("menu");
       this.showMenu();
     });
   }

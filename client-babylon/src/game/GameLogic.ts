@@ -32,6 +32,7 @@ export class GameLogic {
   onScore?: (leftScored: boolean) => void;
   onGameOver?: (leftWon: boolean) => void;
   onPaddleHit?: (isRight: boolean, hitY: number) => void;
+  onWallBounce?: () => void;
 
   update(dt: number, inputDir: number, touchWorldY: number | null) {
     if (this.gameOver) return;
@@ -81,9 +82,11 @@ export class GameLogic {
     if (b.y + BALL_SIZE / 2 > wallBound) {
       b.vy = -Math.abs(b.vy);
       b.y = wallBound - BALL_SIZE / 2;
+      this.onWallBounce?.();
     } else if (b.y - BALL_SIZE / 2 < -wallBound) {
       b.vy = Math.abs(b.vy);
       b.y = -wallBound + BALL_SIZE / 2;
+      this.onWallBounce?.();
     }
 
     // Left paddle
