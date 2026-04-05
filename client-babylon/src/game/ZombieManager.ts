@@ -1,5 +1,5 @@
 import type { AnimationGroup } from "@babylonjs/core/Animations/animationGroup";
-import type { ShadowGenerator } from "@babylonjs/core/Lights/Shadows/shadowGenerator";
+
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { Texture } from "@babylonjs/core/Materials/Textures/texture";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
@@ -11,10 +11,11 @@ import {
   PADDLE_MARGIN,
   WALL_INSET,
 } from "../config/gameConfig";
+import { PlasmaBurnEffect } from "./PlasmaBurnEffect";
 import type { SoundManager } from "./soundManager";
 import type { ZombieInstance } from "./ZombieLoader";
 import {
-  disposeZombieAnimsOnly,
+  returnToPool,
   scaleZombieToHeight,
   spawnZombie,
   stopAllAnims,
@@ -25,12 +26,12 @@ const SPAWN_INTERVAL = 4; // seconds between waves (was 2)
 const QUEUE_INTERVAL = 0.35; // seconds between spawns within a wave
 const FORMATION_STEP = 40; // Z spacing in line formation
 const BALL_KILL_RADIUS = 25;
-const MAX_ZOMBIES = 40;
+const MAX_ZOMBIES = 12;
 const FIGHT_RADIUS = 20;
 const FIGHT_HIT_INTERVAL = 0.8;
 const ZOMBIE_HP = 3;
 const DEATH_ANIM_DURATION = 2.5;
-const MAX_CORPSES = 15;
+
 const DECAL_SIZE = 18;
 const SCREAM_DURATION = 1.2;
 const ZOMBIE_SPEED = 22;
@@ -68,11 +69,6 @@ export interface Zombie {
   hp: number;
 }
 
-interface Corpse {
-  mesh: Mesh;
-  decal: Mesh | null;
-}
-
 export class ZombieManager {
   zombies: Zombie[] = [];
   coins = 0;
@@ -81,18 +77,17 @@ export class ZombieManager {
   private spawnQueue: QueuedSpawn[] = [];
   private queueTimer = 0;
   private scene: Scene;
-  private shadowGen: ShadowGenerator;
   private sound: SoundManager;
-  private corpses: Corpse[] = [];
   private decalMat: StandardMaterial | null = null;
+  private burnEffect: PlasmaBurnEffect;
 
   onZombieReachedMech?: (side: ZombieSide) => void;
   onZombieKilled?: () => void;
 
-  constructor(scene: Scene, shadowGen: ShadowGenerator, sound: SoundManager) {
+  constructor(scene: Scene, shadowGen: unknown, sound: SoundManager) {
     this.scene = scene;
-    this.shadowGen = shadowGen;
     this.sound = sound;
+    this.burnEffect = new PlasmaBurnEffect(scene);
   }
 
   async update(dt: number) {
@@ -235,6 +230,7 @@ export class ZombieManager {
       const dz = z.z - ballZ;
       const dist = Math.sqrt(dx * dx + dz * dz);
       if (dist < BALL_KILL_RADIUS) {
+        this.burnEffect.play(z.instance.root.position.clone());
         this.killZombie(z);
         kills++;
         this.coins++;
@@ -438,10 +434,7 @@ export class ZombieManager {
     // Face the direction of movement
     instance.root.rotation.y = side === "left" ? Math.PI / 2 : -Math.PI / 2;
 
-    // Real shadows — same as mechs (ShadowGenerator)
-    for (const mesh of instance.meshes) {
-      this.shadowGen.addShadowCaster(mesh);
-    }
+    // Zombies no longer cast real shadows (saves ~5-10MB with 12+ shadow casters)
 
     this.zombies.push({
       instance,
@@ -476,72 +469,17 @@ export class ZombieManager {
       }
     }
     for (const z of ready) {
-      // Dispose shadow disc before merging meshes
       if (z.shadowDisc) {
         z.shadowDisc.dispose();
         z.shadowDisc = null;
       }
-
-      // Stop animations so current pose is baked into mesh vertices
-      stopAllAnims(z.instance);
-
-      // Slight random rotation so corpses don't all look identical
-      z.instance.root.rotation.y += (Math.random() - 0.5) * 0.3;
-
-      // Remove from shadow casters before merge
-      if (z.instance.meshes) {
-        for (const mesh of z.instance.meshes) {
-          if (!mesh.isDisposed()) this.shadowGen.removeShadowCaster(mesh);
-        }
+      if (z.decalMesh) {
+        z.decalMesh.dispose();
+        z.decalMesh = null;
       }
 
-      // Freeze zombie as static corpse mesh
-      let corpse: Mesh | null = null;
-      if (z.instance.meshes?.length === 1) {
-        // Single skinned mesh — detach from skeleton and hierarchy, use directly
-        corpse = z.instance.meshes[0];
-        corpse.skeleton = null;
-        corpse.parent = null;
-        z.instance.meshes = [];
-      } else if (z.instance.meshes?.length > 1) {
-        // Filter out already-disposed meshes to prevent MergeMeshes crash
-        const liveMeshes = z.instance.meshes.filter((m) => !m.isDisposed());
-        if (liveMeshes.length > 1) {
-          try {
-            corpse = Mesh.MergeMeshes(
-              liveMeshes,
-              true, // disposeSource
-              true, // allow32BitsIndices
-              undefined, // parent
-              false, // multiMaterial
-              true, // subdivideWithSubMeshes
-            );
-          } catch {
-            // MergeMeshes can fail on edge cases — just skip corpse
-          }
-        } else if (liveMeshes.length === 1) {
-          corpse = liveMeshes[0];
-          corpse.skeleton = null;
-          corpse.parent = null;
-        }
-        z.instance.meshes = [];
-      }
-
-      if (corpse) {
-        corpse.isPickable = false;
-        corpse.freezeWorldMatrix();
-        this.corpses.push({ mesh: corpse, decal: z.decalMesh });
-      }
-
-      // Dispose skeleton, animations, transform nodes (meshes already consumed above)
-      disposeZombieAnimsOnly(z.instance);
-
-      // FIFO: remove oldest corpse if over limit
-      if (this.corpses.length > MAX_CORPSES) {
-        const old = this.corpses.shift()!;
-        old.mesh.dispose();
-        if (old.decal) old.decal.dispose();
-      }
+      // Return zombie to pool for reuse instead of disposing
+      returnToPool(z.instance, z.side);
     }
     this.zombies = this.zombies.filter(
       (z) => !(z.state === "dying" && z.deathTimer >= DEATH_ANIM_DURATION),
@@ -550,20 +488,11 @@ export class ZombieManager {
 
   dispose() {
     for (const z of this.zombies) {
-      if (z.instance.meshes) {
-        for (const mesh of z.instance.meshes)
-          this.shadowGen.removeShadowCaster(mesh);
-      }
-      disposeZombieAnimsOnly(z.instance);
+      returnToPool(z.instance, z.side);
       if (z.shadowDisc) z.shadowDisc.dispose();
       if (z.decalMesh) z.decalMesh.dispose();
     }
     this.zombies = [];
-    for (const c of this.corpses) {
-      c.mesh.dispose();
-      if (c.decal) c.decal.dispose();
-    }
-    this.corpses = [];
   }
 
   restart() {

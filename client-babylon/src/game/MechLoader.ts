@@ -51,6 +51,15 @@ async function ensureAnimContainer(
   const container = await LoadAssetContainerAsync(`${animName}.glb`, scene, {
     rootUrl: ANIMS_DIR,
   });
+  // Strip mesh/material/texture data — we only need animation groups
+  for (const tex of container.textures) tex.dispose();
+  for (const mat of container.materials) mat.dispose();
+  for (const mesh of container.meshes) mesh.dispose();
+  for (const geo of container.geometries) geo.dispose();
+  container.textures.length = 0;
+  container.materials.length = 0;
+  container.meshes.length = 0;
+  container.geometries.length = 0;
   animContainerCache.set(animName, container);
   return container;
 }

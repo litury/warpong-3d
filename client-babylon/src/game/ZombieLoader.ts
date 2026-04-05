@@ -31,6 +31,13 @@ const modelContainers = new Map<string, AssetContainer>();
 const animContainerCache = new Map<string, AssetContainer>();
 let zombieCounter = 0;
 
+/** Pool of recycled zombie instances, keyed by side */
+const zombiePool = new Map<string, ZombieInstance[]>([
+  ["left", []],
+  ["right", []],
+]);
+const MAX_POOL_SIZE = 6;
+
 const SIDE_MODEL: Record<string, string> = {
   left: "model_blue_rigged.glb",
   right: "model_red_rigged.glb",
@@ -75,6 +82,8 @@ async function ensureModelContainer(
 }
 
 export async function preloadZombieAssets(scene: Scene): Promise<void> {
+  // Preload models + anim containers (stripped of mesh/texture, only anim data).
+  // Individual zombies will retarget only the 4 anims they need from these cached containers.
   await Promise.all([
     ensureModelContainer(scene, "left"),
     ensureModelContainer(scene, "right"),
@@ -105,10 +114,36 @@ async function ensureAnimContainer(
   return container;
 }
 
+/** Return a zombie instance to the pool for reuse instead of disposing it. */
+export function returnToPool(zombie: ZombieInstance, side: "left" | "right") {
+  stopAllAnims(zombie);
+  hideZombie(zombie);
+  const pool = zombiePool.get(side)!;
+  if (pool.length < MAX_POOL_SIZE) {
+    pool.push(zombie);
+  } else {
+    // Pool full — dispose completely
+    disposeZombie(zombie);
+  }
+}
+
 export async function spawnZombie(
   scene: Scene,
   side: "left" | "right" = "left",
 ): Promise<ZombieInstance> {
+  // Try to reuse a pooled instance first
+  const pool = zombiePool.get(side)!;
+  if (pool.length > 0) {
+    const recycled = pool.pop()!;
+    stopAllAnims(recycled);
+    showZombie(recycled);
+    for (const mesh of recycled.meshes) {
+      mesh.setEnabled(true);
+      mesh.visibility = 1;
+    }
+    return recycled;
+  }
+
   const c = await ensureModelContainer(scene, side);
   const id = zombieCounter++;
   const prefix = `zombie_${id}`;
@@ -190,14 +225,12 @@ export async function spawnZombie(
     return retargetedAg;
   }
 
-  // Preload all animations
-  await Promise.all(ALL_ANIMS.map(loadAnimForInstance));
-
-  // Pick random animation variants for this zombie instance
+  // Load only the 4 animations this zombie actually needs (not all 10)
   const walkKey = pickRandom(WALK_VARIANTS);
-  const walkAltKey = pickRandom(WALK_VARIANTS);
-  const attackAltKey = pickRandom(ATTACK_VARIANTS);
-  const dieAltKey = pickRandom(DIE_VARIANTS);
+  const attackKey = pickRandom(ATTACK_VARIANTS);
+  const dieKey = pickRandom(DIE_VARIANTS);
+  const needed = new Set([walkKey, attackKey, dieKey, "scream"]);
+  await Promise.all([...needed].map(loadAnimForInstance));
 
   return {
     root,
@@ -205,25 +238,25 @@ export async function spawnZombie(
     skeleton,
     anims,
     get walkAnim() {
-      return anims.get("walk")!;
+      return anims.get(walkKey)!;
     },
     get monsterWalkAnim() {
       return anims.get(walkKey)!;
     },
     get injuredWalkAnim() {
-      return anims.get(walkAltKey)!;
+      return anims.get(walkKey)!;
     },
     get attackAnim() {
-      return anims.get("attack")!;
+      return anims.get(attackKey)!;
     },
     get punchComboAnim() {
-      return anims.get(attackAltKey)!;
+      return anims.get(attackKey)!;
     },
     get dieAnim() {
-      return anims.get("die")!;
+      return anims.get(dieKey)!;
     },
     get dyingBackwardsAnim() {
-      return anims.get(dieAltKey)!;
+      return anims.get(dieKey)!;
     },
     get screamAnim() {
       return anims.get("scream")!;
