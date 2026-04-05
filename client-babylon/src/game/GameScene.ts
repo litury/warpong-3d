@@ -26,13 +26,13 @@ import {
 import { createEnergyShieldMaterial } from "./EnergyShieldMaterial";
 import type { LoadedMech } from "./MechLoader";
 import { loadMech, scaleMechToHeight } from "./MechLoader";
-import type { LoadedVehicle } from "./VehicleLoader";
-import { loadVehicle, scaleVehicle } from "./VehicleLoader";
+import type { PlasmaOrb } from "./PlasmaOrb";
+import { createPlasmaOrb, scalePlasmaOrb } from "./PlasmaOrb";
 
 const MECH_SIZE = 70;
 
 export interface GameObjects {
-  vehicle: LoadedVehicle;
+  orb: PlasmaOrb;
   leftShield: Mesh;
   rightShield: Mesh;
   leftShieldMat: ShaderMaterial;
@@ -84,7 +84,7 @@ export async function createGameScene(engine: Engine): Promise<{
   keyLight.diffuse = new Color3(1, 0.95, 0.9);
 
   // Shadows from key light
-  const shadowGen = new ShadowGenerator(1024, keyLight);
+  const shadowGen = new ShadowGenerator(512, keyLight);
   shadowGen.useBlurExponentialShadowMap = true;
   shadowGen.blurKernel = 4;
 
@@ -113,9 +113,9 @@ export async function createGameScene(engine: Engine): Promise<{
   floor.freezeWorldMatrix();
   floorMat.freeze();
 
-  // --- Vehicle (replaces ball) ---
-  const vehicle = await loadVehicle(scene);
-  scaleVehicle(vehicle, 25); // ~25 game units wide
+  // --- Plasma Orb (replaces ball) ---
+  const orb = createPlasmaOrb(scene);
+  scalePlasmaOrb(orb, 25); // ~25 game units diameter
 
   // --- Energy Shields (curved planes in front of mechs) ---
   const SHIELD_W = PADDLE_HEIGHT; // 100 — matches paddle collision width
@@ -168,11 +168,11 @@ export async function createGameScene(engine: Engine): Promise<{
 
   // GlowLayer — bloom only on shields (disabled on mobile to save GPU)
   // GlowLayer — bloom only on shields
-  const glowLayer = new GlowLayer("glow", scene, { mainTextureSamples: 4 });
+  const glowLayer = new GlowLayer("glow", scene, { mainTextureSamples: 1, mainTextureRatio: 0.5 });
   glowLayer.intensity = 1.0;
   glowLayer.addIncludedOnlyMesh(leftShield as Mesh);
   glowLayer.addIncludedOnlyMesh(rightShield as Mesh);
-  for (const m of vehicle.flame.meshes) glowLayer.addIncludedOnlyMesh(m);
+  glowLayer.addIncludedOnlyMesh(orb.meshes[0]); // only core sphere, billboards already use ALPHA_ADD
 
   // --- Stadium environment ---
   const updateScoreboard = loadStadiumEnvironment(scene);
@@ -190,10 +190,9 @@ export async function createGameScene(engine: Engine): Promise<{
   rightMech.root.position.x = ARENA_WIDTH / 2 - PADDLE_MARGIN;
   rightMech.root.rotation.y = -Math.PI / 2;
 
-  // Register mech + vehicle meshes as shadow casters
+  // Register mech meshes as shadow casters (plasma orb emits light, no shadow)
   for (const mesh of leftMech.meshes) shadowGen.addShadowCaster(mesh);
   for (const mesh of rightMech.meshes) shadowGen.addShadowCaster(mesh);
-  for (const mesh of vehicle.meshes) shadowGen.addShadowCaster(mesh);
 
   leftMech.idleAnim.start(true);
   rightMech.idleAnim.start(true);
@@ -209,7 +208,7 @@ export async function createGameScene(engine: Engine): Promise<{
     camera,
     shadowGen,
     objects: {
-      vehicle,
+      orb,
       leftShield,
       rightShield,
       leftShieldMat,
@@ -227,7 +226,7 @@ function createEdgeFog(scene: Scene): ParticleSystem[] {
   const FOG_X = ARENA_WIDTH / 2 + 30; // 430 — behind mechs
 
   for (const side of [-1, 1]) {
-    const ps = new ParticleSystem(`fog_${side > 0 ? "R" : "L"}`, 300, scene);
+    const ps = new ParticleSystem(`fog_${side > 0 ? "R" : "L"}`, 80, scene);
     ps.particleTexture = new Texture("/assets/smoke_01.png", scene);
 
     // Box emitter: full arena height wall behind mech
@@ -243,12 +242,12 @@ function createEdgeFog(scene: Scene): ParticleSystem[] {
     ps.minEmitPower = 0.02;
     ps.maxEmitPower = 0.1;
 
-    // emitRate=30, avgLife=5s → ~150 particles alive = dense wall
-    ps.minSize = 80;
-    ps.maxSize = 150;
+    // emitRate=20, avgLife=5s → ~100 particles alive = dense wall
+    ps.minSize = 60;
+    ps.maxSize = 80;
     ps.minLifeTime = 4;
     ps.maxLifeTime = 6;
-    ps.emitRate = 30;
+    ps.emitRate = 12;
     ps.minAngularSpeed = 0.01;
     ps.maxAngularSpeed = 0.06;
     ps.blendMode = ParticleSystem.BLENDMODE_STANDARD;
@@ -260,9 +259,9 @@ function createEdgeFog(scene: Scene): ParticleSystem[] {
     ps.addColorGradient(1.0, new Color4(0.5, 0.55, 0.7, 0));
 
     // Size gradient: large particles for heavy overlap
-    ps.addSizeGradient(0, 80);
-    ps.addSizeGradient(0.5, 120);
-    ps.addSizeGradient(1.0, 150);
+    ps.addSizeGradient(0, 50);
+    ps.addSizeGradient(0.5, 70);
+    ps.addSizeGradient(1.0, 80);
 
     ps.start();
     systems.push(ps);
@@ -413,6 +412,8 @@ function loadStadiumEnvironment(
     },
   ];
 
+  // Pre-create only 2 crowd materials (one per texture) and share between planes
+  const crowdMatCache = new Map<string, StandardMaterial>();
   const crowdPlanes: Mesh[] = [];
   for (const { px, py, pz, ry, tex } of sidePlacements) {
     const plane = MeshBuilder.CreatePlane(
@@ -420,7 +421,10 @@ function loadStadiumEnvironment(
       { width: CROWD_W, height: CROWD_H },
       scene,
     );
-    plane.material = makeCrowdMat(tex);
+    if (!crowdMatCache.has(tex)) {
+      crowdMatCache.set(tex, makeCrowdMat(tex));
+    }
+    plane.material = crowdMatCache.get(tex)!;
     plane.position.set(px, py, pz);
     plane.rotation.y = ry;
     plane.freezeWorldMatrix();
@@ -429,8 +433,8 @@ function loadStadiumEnvironment(
 
   // --- Scoreboard billboard (far end, +X) with DynamicTexture ---
   // scoreboard.png is 1536×1024 (3:2)
-  const TEX_W = 1024;
-  const TEX_H = 682;
+  const TEX_W = 512;
+  const TEX_H = 341;
   const BOARD_W = ARENA_HEIGHT * 0.9;
   const BOARD_H = BOARD_W * (TEX_H / TEX_W);
   const scoreboard = MeshBuilder.CreatePlane(
@@ -476,7 +480,7 @@ function loadStadiumEnvironment(
     // Digit positions matched to scoreboard.png pixel analysis:
     // Left orange "0" center: 28%, 50% → x=287, y=341
     // Right cyan "0" center: 44.3%, 46% → x=454, y=314
-    const fontSize = 170;
+    const fontSize = 85;
     ctx.font = `bold ${fontSize}px 'Courier New', monospace`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -484,34 +488,34 @@ function loadStadiumEnvironment(
     // Left score (orange glow)
     ctx.fillStyle = "#ff6a00";
     ctx.shadowColor = "#ff6a00";
-    ctx.shadowBlur = 25;
-    ctx.fillText(`${left}`, 287, 341);
+    ctx.shadowBlur = 12;
+    ctx.fillText(`${left}`, 144, 171);
 
     // Separator ":"
     ctx.fillStyle = "#555";
     ctx.shadowColor = "transparent";
     ctx.shadowBlur = 0;
-    ctx.fillText(":", 370, 328);
+    ctx.fillText(":", 185, 164);
 
     // Right score (cyan glow)
     ctx.fillStyle = "#aaeeff";
     ctx.shadowColor = "#aaeeff";
-    ctx.shadowBlur = 25;
-    ctx.fillText(`${right}`, 454, 314);
+    ctx.shadowBlur = 12;
+    ctx.fillText(`${right}`, 227, 157);
 
     ctx.shadowBlur = 0;
     dynTex.update();
   }
 
-  // Gentle bobbing animation — crowd cheering effect
+  // Gentle bobbing animation — crowd cheering effect (update every 3rd frame to reduce GC)
   let t = 0;
+  let frameSkip = 0;
   scene.registerBeforeRender(() => {
     t += 0.016;
+    if (++frameSkip % 3 !== 0) return;
     for (let i = 0; i < crowdPlanes.length; i++) {
       const bob = 1 + Math.sin(t * 1.8 + i * 1.1) * 0.025;
-      crowdPlanes[i].unfreezeWorldMatrix();
       crowdPlanes[i].scaling.y = bob;
-      crowdPlanes[i].freezeWorldMatrix();
     }
   });
 

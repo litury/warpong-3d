@@ -80,29 +80,31 @@ export function startRenderLoop(
     }
 
     if (state.playing) {
-      // Detect paddle hits by ball velocity sign change → shield impact ripple
+      // Detect paddle hits by ball velocity sign change → shield + orb impact ripple
       const currVx = logic.ball.vx;
-      const vehiclePos = objects.vehicle.root.position;
+      const orbPos = objects.orb.root.position;
       if (prevBallVx < 0 && currVx > 0) {
         lastHitBy = "left";
         triggerShieldImpact(
           objects.leftShieldMat,
           objects.leftShield,
-          new Vector3(vehiclePos.x, vehiclePos.y, vehiclePos.z),
+          new Vector3(orbPos.x, orbPos.y, orbPos.z),
           now,
         );
+        objects.orb.triggerImpact(now);
       } else if (prevBallVx > 0 && currVx < 0) {
         lastHitBy = "right";
         triggerShieldImpact(
           objects.rightShieldMat,
           objects.rightShield,
-          new Vector3(vehiclePos.x, vehiclePos.y, vehiclePos.z),
+          new Vector3(orbPos.x, orbPos.y, orbPos.z),
           now,
         );
+        objects.orb.triggerImpact(now);
       }
       prevBallVx = currVx;
 
-      objects.vehicle.flame.update(dt);
+      objects.orb.update(dt);
       syncPositions(objects, logic, state, dt);
       updateStrafeAnim(objects.leftMech, state.leftMech, dt, 1);
       updateStrafeAnim(objects.rightMech, state.rightMech, dt, -1);
@@ -119,31 +121,17 @@ export function startRenderLoop(
   });
 }
 
-const WHEEL_SPIN_FACTOR = 0.15;
-
 function syncPositions(
   obj: GameObjects,
   logic: GameLogic,
   state: AppState,
   dt: number,
 ) {
-  // Vehicle position (sits on ground)
-  const root = obj.vehicle.root;
+  // Plasma orb position (floating above ground)
+  const root = obj.orb.root;
   root.position.x = logic.ball.x;
   root.position.z = -logic.ball.y;
-  root.position.y = 7.5; // raise so wheels sit on floor (model origin is at center)
-
-  // Vehicle faces movement direction
-  const { vx, vy } = logic.ball;
-  const speed = Math.sqrt(vx * vx + vy * vy);
-  if (speed > 1) {
-    root.rotation.y = Math.atan2(-vy, vx) - Math.PI / 2;
-  }
-
-  // Wheel spin proportional to speed
-  for (const wheel of obj.vehicle.wheels) {
-    wheel.rotation.x += speed * dt * WHEEL_SPIN_FACTOR;
-  }
+  root.position.y = 12; // float above arena floor
 
   // Shield = paddle. Clamp with margin so shield + glow stays inside arena walls.
   const shieldBound = ARENA_HEIGHT / 2 - PADDLE_HEIGHT / 2 - 10;
