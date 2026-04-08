@@ -26,6 +26,12 @@ export class GameLogic {
   score: Score = { left: 0, right: 0 };
   gameOver = false;
 
+  // Interpolation targets for online mode
+  private targetBall: BallData = { x: 0, y: 0, vx: 0, vy: 0 };
+  private targetLeftY = 0;
+  private targetRightY = 0;
+  private hasServerState = false;
+
   paddleSpeed = PADDLE_SPEED;
   paddleHeight = PADDLE_HEIGHT;
 
@@ -215,14 +221,38 @@ export class GameLogic {
     scoreLeft: number,
     scoreRight: number,
   ) {
-    this.ball.x = ballX;
-    this.ball.y = ballY;
-    this.ball.vx = ballVx;
-    this.ball.vy = ballVy;
-    this.leftPaddleY = leftY;
-    this.rightPaddleY = rightY;
+    this.targetBall.x = ballX;
+    this.targetBall.y = ballY;
+    this.targetBall.vx = ballVx;
+    this.targetBall.vy = ballVy;
+    this.targetLeftY = leftY;
+    this.targetRightY = rightY;
     this.score.left = scoreLeft;
     this.score.right = scoreRight;
+
+    if (!this.hasServerState) {
+      // First server update — snap immediately, no lerp
+      this.ball.x = ballX;
+      this.ball.y = ballY;
+      this.ball.vx = ballVx;
+      this.ball.vy = ballVy;
+      this.leftPaddleY = leftY;
+      this.rightPaddleY = rightY;
+      this.hasServerState = true;
+    }
+  }
+
+  /** Smoothly move current positions toward server targets. Call every frame in online mode. */
+  interpolate(dt: number) {
+    const LERP_SPEED = 20;
+    const f = 1 - Math.exp(-LERP_SPEED * dt);
+
+    this.ball.x += (this.targetBall.x - this.ball.x) * f;
+    this.ball.y += (this.targetBall.y - this.ball.y) * f;
+    this.ball.vx = this.targetBall.vx;
+    this.ball.vy = this.targetBall.vy;
+    this.leftPaddleY += (this.targetLeftY - this.leftPaddleY) * f;
+    this.rightPaddleY += (this.targetRightY - this.rightPaddleY) * f;
   }
 
   restart() {
@@ -230,6 +260,7 @@ export class GameLogic {
     this.leftPaddleY = 0;
     this.rightPaddleY = 0;
     this.gameOver = false;
+    this.hasServerState = false;
     this.resetBall(true);
   }
 }

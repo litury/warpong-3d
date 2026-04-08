@@ -72,6 +72,7 @@ export function startRenderLoop(
         const dir = input.getDirection();
         const direction = dir > 0 ? "Up" : dir < 0 ? "Down" : "Idle";
         ws.send({ type: "PlayerInput", direction });
+        logic.interpolate(dt);
       }
     }
 
