@@ -1,6 +1,6 @@
 import type { ClientMessage, ServerMessage } from "../shared/messages";
 
-const SERVER_URL = "ws://localhost:3030";
+const SERVER_URL = __WS_URL__;
 
 // Unique ID per browser tab so two tabs can play against each other
 const LOCAL_PLAYER_ID = `player-${crypto.randomUUID()}`;
