@@ -17,6 +17,7 @@ export interface UIElements {
   btnOnline: HTMLElement;
   btnRestart: HTMLElement;
   coins: HTMLElement;
+  onlineCount: HTMLElement;
 }
 
 export function queryUIElements(): UIElements {
@@ -32,6 +33,7 @@ export function queryUIElements(): UIElements {
     btnOnline: document.getElementById("btn-online")!,
     btnRestart: document.getElementById("btn-restart")!,
     coins: document.getElementById("coins")!,
+    onlineCount: document.getElementById("online-count")!,
   };
 }
 
@@ -46,7 +48,7 @@ export class UIManager {
     this.ui.loading.textContent = t("loading");
     (this.ui.menu.querySelector("h1") as HTMLElement).textContent = t("title");
     this.ui.btnSolo.textContent = t("solo");
-    this.ui.btnOnline.textContent = t("online_soon");
+    this.ui.btnOnline.textContent = t("online");
     this.ui.btnRestart.textContent = t("play_again");
   }
 
@@ -120,6 +122,10 @@ export class UIManager {
 
   updateCoins(zombieManager: ZombieManager) {
     this.ui.coins.textContent = `${t("coins")}: ${zombieManager.coins}`;
+  }
+
+  updateOnlineCount(count: number) {
+    this.ui.onlineCount.textContent = `${t("online_count")}: ${count}`;
   }
 
   updateFps(fps: number) {

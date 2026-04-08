@@ -14,6 +14,7 @@ const translations: Record<string, Record<string, string>> = {
     waiting: "Ожидание соперника...",
     no_opponent: "Соперник не найден. Попробуйте позже.",
     matching: "Поиск...",
+    online_count: "Онлайн",
   },
   en: {
     title: "PONG 3D",
@@ -28,6 +29,7 @@ const translations: Record<string, Record<string, string>> = {
     waiting: "Waiting for opponent...",
     no_opponent: "No opponent found. Try again later.",
     matching: "Matching...",
+    online_count: "Online",
   },
 };
 

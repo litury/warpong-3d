@@ -66,6 +66,7 @@ export function startRenderLoop(
         },
         onOpponentDisconnected: () => ui.showGameOver("OPPONENT LEFT"),
         onScoreUpdate: () => ui.updateScore(logic),
+        onOnlineCount: (count) => ui.updateOnlineCount(count),
       });
 
       if (state.playing && !logic.gameOver) {
