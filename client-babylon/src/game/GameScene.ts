@@ -56,7 +56,7 @@ export async function createGameScene(engine: Engine): Promise<{
 
   // Локальный env map — PBR-материалам обязательно нужен для корректного освещения
   scene.environmentTexture = CubeTexture.CreateFromPrefilteredData(
-    "/assets/environmentSpecular.env",
+    "./assets/environmentSpecular.env",
     scene,
   );
   scene.environmentIntensity = 3.0;
@@ -106,7 +106,7 @@ export async function createGameScene(engine: Engine): Promise<{
     scene,
   );
   const floorMat = new StandardMaterial("floorMat", scene);
-  floorMat.diffuseTexture = new Texture("/assets/arena_bg.ktx2", scene);
+  floorMat.diffuseTexture = new Texture("./assets/arena_bg.png", scene);
   floorMat.specularColor = new Color3(0.1, 0.1, 0.1);
   floor.material = floorMat;
   floor.receiveShadows = true;
@@ -132,7 +132,7 @@ export async function createGameScene(engine: Engine): Promise<{
   );
 
   // Shield pattern texture (sparkle overlay)
-  const shieldTex = new Texture("/assets/shield_pattern.png", scene);
+  const shieldTex = new Texture("./assets/shield_pattern.png", scene);
   shieldTex.wrapU = Texture.WRAP_ADDRESSMODE;
   shieldTex.wrapV = Texture.WRAP_ADDRESSMODE;
   // Set shield size for edge fade calculation (half-extents)
@@ -227,7 +227,7 @@ function createEdgeFog(scene: Scene): ParticleSystem[] {
 
   for (const side of [-1, 1]) {
     const ps = new ParticleSystem(`fog_${side > 0 ? "R" : "L"}`, 80, scene);
-    ps.particleTexture = new Texture("/assets/smoke_01.png", scene);
+    ps.particleTexture = new Texture("./assets/smoke_01.png", scene);
 
     // Box emitter: full arena height wall behind mech
     ps.createBoxEmitter(
@@ -281,7 +281,7 @@ function loadStadiumEnvironment(
 
   // --- Arena wall billboards (sprites on Planes, no deformation) ---
   const WALL_H = 40;
-  // wall_side.ktx2 is 768×512 (3:2) → width = WALL_H * 1.5
+  // wall_side.png is 768×512 (3:2) → width = WALL_H * 1.5
   const SIDE_W = WALL_H * (1536 / 1024);
   const makeWallMat = (texPath: string) => {
     const mat = new StandardMaterial(`wallMat_${texPath}`, scene);
@@ -300,7 +300,7 @@ function loadStadiumEnvironment(
     return mat;
   };
 
-  const sideWallMat = makeWallMat("/assets/wall_side.ktx2");
+  const sideWallMat = makeWallMat("./assets/wall_side.png");
 
   // Side walls (±Z) only — no walls at ±X (behind player/opponent)
   const sideSegments = Math.ceil(ARENA_WIDTH / SIDE_W);
@@ -358,42 +358,42 @@ function loadStadiumEnvironment(
       py: CROWD_H / 2,
       pz: OFFSET_Z,
       ry: Math.PI,
-      tex: "/assets/crowd_side_2.png",
+      tex: "./assets/crowd_side_2.png",
     },
     {
       px: 80,
       py: CROWD_H / 2,
       pz: OFFSET_Z,
       ry: Math.PI,
-      tex: "/assets/crowd_side_1.png",
+      tex: "./assets/crowd_side_1.png",
     },
     {
       px: 220,
       py: CROWD_H / 2,
       pz: OFFSET_Z,
       ry: Math.PI,
-      tex: "/assets/crowd_side_2.png",
+      tex: "./assets/crowd_side_2.png",
     },
     {
       px: -80,
       py: CROWD_H / 2,
       pz: -OFFSET_Z,
       ry: 0,
-      tex: "/assets/crowd_side_1.png",
+      tex: "./assets/crowd_side_1.png",
     },
     {
       px: 80,
       py: CROWD_H / 2,
       pz: -OFFSET_Z,
       ry: 0,
-      tex: "/assets/crowd_side_2.png",
+      tex: "./assets/crowd_side_2.png",
     },
     {
       px: 220,
       py: CROWD_H / 2,
       pz: -OFFSET_Z,
       ry: 0,
-      tex: "/assets/crowd_side_1.png",
+      tex: "./assets/crowd_side_1.png",
     },
     // Back crowd (+X wall) — flanking scoreboard
     {
@@ -401,14 +401,14 @@ function loadStadiumEnvironment(
       py: CROWD_H / 2,
       pz: 200,
       ry: Math.PI / 2,
-      tex: "/assets/crowd_side_1.png",
+      tex: "./assets/crowd_side_1.png",
     },
     {
       px: OFFSET_X,
       py: CROWD_H / 2,
       pz: -200,
       ry: Math.PI / 2,
-      tex: "/assets/crowd_side_2.png",
+      tex: "./assets/crowd_side_2.png",
     },
   ];
 
@@ -462,7 +462,7 @@ function loadStadiumEnvironment(
 
   // Load scoreboard.png as background image for DynamicTexture
   const bgImg = new Image();
-  bgImg.src = "/assets/scoreboard_clean.png";
+  bgImg.src = "./assets/scoreboard_clean.png";
   let bgReady = false;
   bgImg.onload = () => {
     bgReady = true;

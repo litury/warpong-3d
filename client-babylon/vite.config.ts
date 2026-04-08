@@ -3,6 +3,7 @@ import { defineConfig, loadEnv } from "vite";
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   return {
+    base: "./",
     server: { port: 5174 },
     build: { target: "es2020" },
     define: {

@@ -303,7 +303,7 @@ export class ZombieManager {
     if (!this.decalMat) {
       this.decalMat = new StandardMaterial("bloodMat", this.scene);
       this.decalMat.diffuseTexture = new Texture(
-        "/assets/blood_decal.png",
+        "./assets/blood_decal.png",
         this.scene,
       );
       this.decalMat.diffuseTexture.hasAlpha = true;

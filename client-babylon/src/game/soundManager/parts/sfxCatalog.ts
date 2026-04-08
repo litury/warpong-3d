@@ -1,4 +1,4 @@
-const SFX_DIR = "/assets/audio/sfx/";
+const SFX_DIR = "./assets/audio/sfx/";
 
 export interface SfxEntry {
   files: string[];

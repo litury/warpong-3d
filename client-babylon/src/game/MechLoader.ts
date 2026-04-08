@@ -22,8 +22,8 @@ export interface LoadedMech {
   strafeRightAnim: AnimationGroup;
 }
 
-const MODEL_DIR = "/assets/mech/";
-const ANIMS_DIR = "/assets/mech/anims/";
+const MODEL_DIR = "./assets/mech/";
+const ANIMS_DIR = "./assets/mech/anims/";
 
 let modelContainer: AssetContainer | null = null;
 

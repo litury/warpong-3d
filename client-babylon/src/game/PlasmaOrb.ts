@@ -13,7 +13,7 @@ import {
   updateOrbTime,
 } from "./PlasmaOrbMaterial";
 
-const PLASMA_DIR = "/assets/plasma/";
+const PLASMA_DIR = "./assets/plasma/";
 
 export interface PlasmaOrb {
   root: TransformNode;

@@ -24,8 +24,8 @@ export interface ZombieInstance {
   screamAnim: AnimationGroup;
 }
 
-const MODEL_DIR = "/assets/zombie/";
-const ANIMS_DIR = "/assets/zombie/anims/";
+const MODEL_DIR = "./assets/zombie/";
+const ANIMS_DIR = "./assets/zombie/anims/";
 
 const modelContainers = new Map<string, AssetContainer>();
 const animContainerCache = new Map<string, AssetContainer>();

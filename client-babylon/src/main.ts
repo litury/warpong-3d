@@ -1,6 +1,6 @@
 import type { SDK } from "ysdk";
 import { Engine } from "@babylonjs/core/Engines/engine";
-import "@babylonjs/core/Misc/khronosTextureContainer2";
+
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { AppState } from "./AppState";
 import { triggerShieldImpact } from "./game/EnergyShieldMaterial";

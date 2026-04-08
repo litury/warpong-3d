@@ -1,4 +1,4 @@
-export const MUSIC_DIR = "/assets/audio/music/";
+export const MUSIC_DIR = "./assets/audio/music/";
 
 export interface MusicTrack {
   file: string;

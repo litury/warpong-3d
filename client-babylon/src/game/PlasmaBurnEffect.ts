@@ -29,9 +29,9 @@ export class PlasmaBurnEffect {
   constructor(scene: Scene) {
     this.scene = scene;
     // Share textures across all pool instances to avoid duplicates
-    this.flareTex = new Texture("/assets/plasma/flare_01.png", scene);
-    this.flameTex = new Texture("/assets/particles/flame_02.png", scene);
-    this.smokeTex = new Texture("/assets/smoke_01.png", scene);
+    this.flareTex = new Texture("./assets/plasma/flare_01.png", scene);
+    this.flameTex = new Texture("./assets/particles/flame_02.png", scene);
+    this.smokeTex = new Texture("./assets/smoke_01.png", scene);
     for (let i = 0; i < MAX_POOL; i++) {
       this.pool.push(this.createInstance(i));
     }
