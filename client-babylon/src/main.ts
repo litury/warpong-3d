@@ -53,6 +53,9 @@ async function main() {
   ui.hideLoading();
   ui.showMenu();
 
+  // Connect to WS early to receive online player count in menu
+  ws.connectPassive();
+
   // Tell Yandex platform the game is fully loaded and ready
   ysdk?.features.LoadingAPI?.ready();
 

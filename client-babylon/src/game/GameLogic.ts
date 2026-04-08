@@ -14,6 +14,8 @@ import {
 } from "../config/gameConfig";
 import type { BallData, Score } from "../types";
 
+const INTERP_SPEED = 20;
+
 export class GameLogic {
   ball: BallData = {
     x: 0,
@@ -221,17 +223,11 @@ export class GameLogic {
     scoreLeft: number,
     scoreRight: number,
   ) {
-    this.targetBall.x = ballX;
-    this.targetBall.y = ballY;
-    this.targetBall.vx = ballVx;
-    this.targetBall.vy = ballVy;
-    this.targetLeftY = leftY;
-    this.targetRightY = rightY;
-    this.score.left = scoreLeft;
-    this.score.right = scoreRight;
+    // Snap on score change or first update — no lerp, instant teleport
+    const scoreChanged =
+      scoreLeft !== this.score.left || scoreRight !== this.score.right;
 
-    if (!this.hasServerState) {
-      // First server update — snap immediately, no lerp
+    if (!this.hasServerState || scoreChanged) {
       this.ball.x = ballX;
       this.ball.y = ballY;
       this.ball.vx = ballVx;
@@ -240,13 +236,24 @@ export class GameLogic {
       this.rightPaddleY = rightY;
       this.hasServerState = true;
     }
+
+    this.targetBall.x = ballX;
+    this.targetBall.y = ballY;
+    this.targetBall.vx = ballVx;
+    this.targetBall.vy = ballVy;
+    this.targetLeftY = leftY;
+    this.targetRightY = rightY;
+    this.score.left = scoreLeft;
+    this.score.right = scoreRight;
   }
 
   /** Smoothly move current positions toward server targets. Call every frame in online mode. */
   interpolate(dt: number) {
-    const LERP_SPEED = 20;
-    const f = 1 - Math.exp(-LERP_SPEED * dt);
+    // Extrapolate target by velocity so ball doesn't lag between server ticks
+    this.targetBall.x += this.targetBall.vx * dt;
+    this.targetBall.y += this.targetBall.vy * dt;
 
+    const f = 1 - Math.exp(-INTERP_SPEED * dt);
     this.ball.x += (this.targetBall.x - this.ball.x) * f;
     this.ball.y += (this.targetBall.y - this.ball.y) * f;
     this.ball.vx = this.targetBall.vx;

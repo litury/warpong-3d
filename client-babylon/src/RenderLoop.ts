@@ -50,7 +50,8 @@ export function startRenderLoop(
     updateShieldTime(objects.leftShieldMat, now);
     updateShieldTime(objects.rightShieldMat, now);
 
-    if (state.mode === "online") {
+    // Process server messages whenever WS is connected (online count works in menu too)
+    if (ws.connected) {
       processServerMessages(ws, logic, state.playerSide, {
         onQueueJoined: () => ui.showWaiting(),
         onMatchFound: (side) => {
@@ -68,17 +69,18 @@ export function startRenderLoop(
         onScoreUpdate: () => ui.updateScore(logic),
         onOnlineCount: (count) => ui.updateOnlineCount(count),
       });
+    }
 
-      if (state.playing && !logic.gameOver) {
-        const dir = input.getDirection();
-        const direction = dir > 0 ? "Up" : dir < 0 ? "Down" : "Idle";
-        ws.send({ type: "PlayerInput", direction });
-        logic.interpolate(dt);
-      }
+    if (state.mode === "online" && state.playing && !logic.gameOver) {
+      const dir = input.getDirection();
+      const direction = dir > 0 ? "Up" : dir < 0 ? "Down" : "Idle";
+      ws.send({ type: "PlayerInput", direction });
     }
 
     if (state.mode === "solo" && state.playing) {
       logic.update(dt, input.getDirection(), input.getTouchWorldY());
+    } else if (state.mode === "online" && state.playing && !logic.gameOver) {
+      logic.interpolate(dt);
     }
 
     if (state.playing) {
