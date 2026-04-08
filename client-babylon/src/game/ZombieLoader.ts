@@ -43,26 +43,7 @@ const SIDE_MODEL: Record<string, string> = {
   right: "model_red_rigged.glb",
 };
 
-const ALL_ANIMS = [
-  "walk",
-  "walk_alt1",
-  "walk_alt2",
-  "attack",
-  "attack_alt1",
-  "attack_alt2",
-  "die",
-  "die_alt1",
-  "die_alt2",
-  "scream",
-];
-
-const WALK_VARIANTS = ["walk", "walk_alt1", "walk_alt2"];
-const ATTACK_VARIANTS = ["attack", "attack_alt1", "attack_alt2"];
-const DIE_VARIANTS = ["die", "die_alt1", "die_alt2"];
-
-function pickRandom<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
+const ALL_ANIMS = ["walk", "attack", "die", "scream"];
 
 async function ensureModelContainer(
   scene: Scene,
@@ -225,12 +206,8 @@ export async function spawnZombie(
     return retargetedAg;
   }
 
-  // Load only the 4 animations this zombie actually needs (not all 10)
-  const walkKey = pickRandom(WALK_VARIANTS);
-  const attackKey = pickRandom(ATTACK_VARIANTS);
-  const dieKey = pickRandom(DIE_VARIANTS);
-  const needed = new Set([walkKey, attackKey, dieKey, "scream"]);
-  await Promise.all([...needed].map(loadAnimForInstance));
+  // Load all 4 animations for this zombie
+  await Promise.all(ALL_ANIMS.map(loadAnimForInstance));
 
   return {
     root,
@@ -238,25 +215,25 @@ export async function spawnZombie(
     skeleton,
     anims,
     get walkAnim() {
-      return anims.get(walkKey)!;
+      return anims.get("walk")!;
     },
     get monsterWalkAnim() {
-      return anims.get(walkKey)!;
+      return anims.get("walk")!;
     },
     get injuredWalkAnim() {
-      return anims.get(walkKey)!;
+      return anims.get("walk")!;
     },
     get attackAnim() {
-      return anims.get(attackKey)!;
+      return anims.get("attack")!;
     },
     get punchComboAnim() {
-      return anims.get(attackKey)!;
+      return anims.get("attack")!;
     },
     get dieAnim() {
-      return anims.get(dieKey)!;
+      return anims.get("die")!;
     },
     get dyingBackwardsAnim() {
-      return anims.get(dieKey)!;
+      return anims.get("die")!;
     },
     get screamAnim() {
       return anims.get("scream")!;
