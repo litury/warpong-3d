@@ -4,7 +4,7 @@ const translations: Record<string, Record<string, string>> = {
   ru: {
     title: "ПОНГ 3D",
     solo: "СОЛО",
-    online_soon: "ОНЛАЙН (СКОРО)",
+    online: "ОНЛАЙН",
     play_again: "ИГРАТЬ СНОВА",
     you_win: "ПОБЕДА!",
     you_lose: "ПОРАЖЕНИЕ!",
@@ -18,7 +18,7 @@ const translations: Record<string, Record<string, string>> = {
   en: {
     title: "PONG 3D",
     solo: "SOLO",
-    online_soon: "ONLINE (SOON)",
+    online: "ONLINE",
     play_again: "PLAY AGAIN",
     you_win: "YOU WIN!",
     you_lose: "YOU LOSE!",
