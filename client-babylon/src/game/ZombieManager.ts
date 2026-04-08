@@ -79,7 +79,7 @@ export class ZombieManager {
   private scene: Scene;
   private sound: SoundManager;
   private decalMat: StandardMaterial | null = null;
-  private burnEffect: PlasmaBurnEffect;
+  private burnEffect: PlasmaBurnEffect | null = null;
 
   onZombieReachedMech?: (side: ZombieSide) => void;
   onZombieKilled?: () => void;
@@ -87,7 +87,6 @@ export class ZombieManager {
   constructor(scene: Scene, shadowGen: unknown, sound: SoundManager) {
     this.scene = scene;
     this.sound = sound;
-    this.burnEffect = new PlasmaBurnEffect(scene);
   }
 
   async update(dt: number) {
@@ -230,6 +229,7 @@ export class ZombieManager {
       const dz = z.z - ballZ;
       const dist = Math.sqrt(dx * dx + dz * dz);
       if (dist < BALL_KILL_RADIUS) {
+        if (!this.burnEffect) this.burnEffect = new PlasmaBurnEffect(this.scene);
         this.burnEffect.play(z.instance.root.position.clone());
         this.killZombie(z);
         kills++;

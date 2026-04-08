@@ -1,3 +1,4 @@
+import type { SDK } from "ysdk";
 import { Engine } from "@babylonjs/core/Engines/engine";
 import "@babylonjs/core/Misc/khronosTextureContainer2";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
@@ -12,10 +13,30 @@ import { ZombieManager } from "./game/ZombieManager";
 import { WsClient } from "./network/wsClient";
 import { startRenderLoop } from "./RenderLoop";
 import { queryUIElements, UIManager } from "./UIManager";
+import { setLang, t } from "./i18n";
 
 const canvas = document.getElementById("renderCanvas") as HTMLCanvasElement;
 
+/** Yandex Games SDK — null when running outside the platform (local dev) */
+let ysdk: SDK | null = null;
+
+async function initYandexSDK(): Promise<SDK | null> {
+  if (typeof YaGames === "undefined") return null;
+  try {
+    return await YaGames.init();
+  } catch {
+    console.warn("Yandex SDK init failed — running in standalone mode");
+    return null;
+  }
+}
+
 async function main() {
+  ysdk = await initYandexSDK();
+
+  // Set language from Yandex SDK (requirement 2.14)
+  const lang = ysdk?.environment.i18n.lang ?? "ru";
+  setLang(lang);
+
   const engine = new Engine(canvas, true, { stencil: true });
   const { scene, objects, shadowGen, updateScoreboard } =
     await createGameScene(engine);
@@ -28,10 +49,12 @@ async function main() {
   const zombieManager = new ZombieManager(scene, shadowGen, sound);
   const ui = new UIManager(queryUIElements(), updateScoreboard, sound);
 
-  await preloadZombieAssets(scene);
-
+  ui.applyTranslations();
   ui.hideLoading();
   ui.showMenu();
+
+  // Tell Yandex platform the game is fully loaded and ready
+  ysdk?.features.LoadingAPI?.ready();
 
   // Unlock audio on first user click — creates AudioContext and loads sounds
   const unlockAudio = async () => {
@@ -45,6 +68,8 @@ async function main() {
   document.addEventListener("click", unlockAudio);
   document.addEventListener("touchstart", unlockAudio);
 
+  let zombieAssetsReady = false;
+
   function startGame() {
     ui.showGameUI();
     logic.restart();
@@ -53,6 +78,13 @@ async function main() {
     ui.updateCoins(zombieManager);
     state.resetForNewGame();
     sound.playMusic("battle");
+    ysdk?.features.GameplayAPI?.start();
+
+    // Lazy-load zombie assets on first game start (4s spawn delay gives plenty of time)
+    if (!zombieAssetsReady) {
+      zombieAssetsReady = true;
+      preloadZombieAssets(scene);
+    }
   }
 
   logic.onWallBounce = () => sound.play("wallBounce");
@@ -80,7 +112,8 @@ async function main() {
     if (state.mode === "solo") {
       sound.play(leftWon ? "victory" : "defeat");
       sound.playMusic("menu");
-      ui.showGameOver(leftWon ? "YOU WIN!" : "YOU LOSE!");
+      ui.showGameOver(leftWon ? t("you_win") : t("you_lose"));
+      ysdk?.features.GameplayAPI?.stop();
     }
   };
 

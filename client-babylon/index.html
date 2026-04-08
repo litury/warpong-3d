@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="icon" type="image/png" href="/favicon.png">
   <title>Pong 3D - Babylon.js</title>
+  <script src="https://yandex.ru/games/sdk/v2"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
@@ -67,6 +68,7 @@
       transition: background 0.2s;
     }
     .menu-btn:hover { background: #444; border-color: #888; }
+    .menu-btn:disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
     #status {
       display: none;
       position: absolute; top: 50%; left: 50%;
@@ -84,7 +86,7 @@
   <div id="menu">
     <h1>PONG 3D</h1>
     <button class="menu-btn" id="btn-solo">SOLO</button>
-    <button class="menu-btn" id="btn-online">ONLINE</button>
+    <button class="menu-btn" id="btn-online" disabled>ONLINE (SOON)</button>
   </div>
   <div id="status"></div>
   <div id="game-over">

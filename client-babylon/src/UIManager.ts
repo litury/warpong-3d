@@ -3,6 +3,7 @@ import type { GameLogic } from "./game/GameLogic";
 import type { SoundManager } from "./game/soundManager";
 import type { ZombieManager } from "./game/ZombieManager";
 import type { WsClient } from "./network/wsClient";
+import { t } from "./i18n";
 
 export interface UIElements {
   hud: HTMLElement;
@@ -41,6 +42,14 @@ export class UIManager {
     private sound: SoundManager,
   ) {}
 
+  applyTranslations() {
+    this.ui.loading.textContent = t("loading");
+    (this.ui.menu.querySelector("h1") as HTMLElement).textContent = t("title");
+    this.ui.btnSolo.textContent = t("solo");
+    this.ui.btnOnline.textContent = t("online_soon");
+    this.ui.btnRestart.textContent = t("play_again");
+  }
+
   hideLoading() {
     this.ui.loading.style.display = "none";
   }
@@ -59,16 +68,16 @@ export class UIManager {
   showConnecting() {
     this.ui.menu.style.display = "none";
     this.ui.status.style.display = "block";
-    this.ui.status.textContent = "Connecting...";
+    this.ui.status.textContent = t("connecting");
   }
 
   showWaiting() {
-    this.ui.status.textContent = "Waiting for opponent...";
+    this.ui.status.textContent = t("waiting");
   }
 
   showQueueStatus(estimatedWaitSec: number) {
     if (estimatedWaitSec <= 0) {
-      this.ui.status.textContent = "Matching...";
+      this.ui.status.textContent = t("matching");
     } else {
       const m = Math.floor(estimatedWaitSec / 60);
       const s = estimatedWaitSec % 60;
@@ -78,7 +87,7 @@ export class UIManager {
   }
 
   showQueueTimeout() {
-    this.ui.status.textContent = "No opponent found. Try again later.";
+    this.ui.status.textContent = t("no_opponent");
     setTimeout(() => {
       this.ui.status.style.display = "none";
       this.showMenu();
@@ -110,7 +119,7 @@ export class UIManager {
   }
 
   updateCoins(zombieManager: ZombieManager) {
-    this.ui.coins.textContent = `Coins: ${zombieManager.coins}`;
+    this.ui.coins.textContent = `${t("coins")}: ${zombieManager.coins}`;
   }
 
   updateFps(fps: number) {
