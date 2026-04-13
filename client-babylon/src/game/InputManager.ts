@@ -67,6 +67,16 @@ export class InputManager {
     return this.targetWorldY;
   }
 
+  /** Discrete direction from touch drag, for online mode. +1=Up, -1=Down, 0=Idle. */
+  getTouchDirection(currentPaddleY: number): number {
+    if (this.targetWorldY === null) return 0;
+    const diff = this.targetWorldY - currentPaddleY;
+    const deadZone = 5;
+    if (diff > deadZone) return 1;
+    if (diff < -deadZone) return -1;
+    return 0;
+  }
+
   private handleDown(ev: PointerEvent) {
     if (this.activePointerId !== null) return;
     const rect = this.canvas.getBoundingClientRect();

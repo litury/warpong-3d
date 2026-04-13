@@ -68,11 +68,15 @@ export function startRenderLoop(
         onOpponentDisconnected: () => ui.showGameOver("OPPONENT LEFT"),
         onScoreUpdate: () => ui.updateScore(logic),
         onOnlineCount: (count) => ui.updateOnlineCount(count),
+        onGameStatsUpdate: (count) => ui.updateMatchesCount(count),
       });
     }
 
     if (state.mode === "online" && state.playing && !logic.gameOver) {
-      const dir = input.getDirection();
+      const myPaddleY =
+        state.playerSide === "Right" ? logic.rightPaddleY : logic.leftPaddleY;
+      const kbDir = input.getDirection();
+      const dir = kbDir !== 0 ? kbDir : input.getTouchDirection(myPaddleY);
       const direction = dir > 0 ? "Up" : dir < 0 ? "Down" : "Idle";
       ws.send({ type: "PlayerInput", direction });
     }
