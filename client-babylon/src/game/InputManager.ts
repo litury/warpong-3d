@@ -1,37 +1,49 @@
+import { PointerEventTypes } from "@babylonjs/core/Events/pointerEvents";
+import type { Scene } from "@babylonjs/core/scene";
 import { ARENA_HEIGHT } from "../config/gameConfig";
+
+const TOUCH_ZONE_FRACTION = 0.3; // bottom 30% of screen
+const SENSITIVITY = 1.6; // 1px finger → 1.6px paddle in game world
 
 export class InputManager {
   private keys = new Set<string>();
-  private touchX: number | null = null;
-  private touchY: number | null = null;
-  portrait = false;
+  private canvas: HTMLCanvasElement;
+  private activePointerId: number | null = null;
+  private startPointerScreenX = 0;
+  private startPaddleWorldY = 0;
+  private targetWorldY: number | null = null;
+  private currentPaddleYProvider: () => number = () => 0;
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, scene: Scene) {
+    this.canvas = canvas;
+
     window.addEventListener("keydown", (e) => this.keys.add(e.code));
     window.addEventListener("keyup", (e) => this.keys.delete(e.code));
 
-    canvas.addEventListener("touchstart", (e) => this.handleTouch(e), {
-      passive: false,
+    scene.onPointerObservable.add((info) => {
+      const ev = info.event as PointerEvent;
+      switch (info.type) {
+        case PointerEventTypes.POINTERDOWN:
+          this.handleDown(ev);
+          break;
+        case PointerEventTypes.POINTERMOVE:
+          this.handleMove(ev);
+          break;
+        case PointerEventTypes.POINTERUP:
+          this.handleUp(ev);
+          break;
+      }
     });
-    canvas.addEventListener("touchmove", (e) => this.handleTouch(e), {
-      passive: false,
-    });
-    canvas.addEventListener("touchend", () => {
-      this.touchX = null;
-      this.touchY = null;
-    });
+
+    canvas.addEventListener("pointercancel", (ev) => this.handleUp(ev));
   }
 
-  private handleTouch(e: TouchEvent) {
-    e.preventDefault();
-    const touch = e.touches[0];
-    if (!touch) return;
-    const rect = (e.target as HTMLCanvasElement).getBoundingClientRect();
-    this.touchX = (touch.clientX - rect.left) / rect.width;
-    this.touchY = (touch.clientY - rect.top) / rect.height;
+  /** Register a function that returns current paddle Y in game world units. */
+  setPaddleYProvider(fn: () => number) {
+    this.currentPaddleYProvider = fn;
   }
 
-  /** Keyboard direction: A/Left/Up/W = -1 (left), D/Right/Down/S = +1 (right) */
+  /** Keyboard direction: A/Left/Up/W = -1, D/Right/Down/S = +1 */
   getDirection(): number {
     if (
       this.keys.has("KeyA") ||
@@ -50,17 +62,48 @@ export class InputManager {
     return 0;
   }
 
-  /** Touch world Y (landscape: vertical paddle control) */
+  /** Target paddle Y in game world units, or null if no active drag. */
   getTouchWorldY(): number | null {
-    if (this.touchY === null) return null;
-    return (0.5 - this.touchY) * ARENA_HEIGHT;
+    return this.targetWorldY;
   }
 
-  /** Touch world Y mapped from horizontal drag (portrait: horizontal paddle → game Y axis) */
-  getTouchWorldYFromPortrait(): number | null {
-    if (this.touchX === null) return null;
-    // In portrait, horizontal finger position maps to paddle Y (game coordinates)
-    // touchX 0=left → negative Y, touchX 1=right → positive Y
-    return (this.touchX - 0.5) * ARENA_HEIGHT;
+  private handleDown(ev: PointerEvent) {
+    if (this.activePointerId !== null) return;
+    const rect = this.canvas.getBoundingClientRect();
+    const localY = ev.clientY - rect.top;
+    const inTouchZone = localY > rect.height * (1 - TOUCH_ZONE_FRACTION);
+    if (!inTouchZone) return;
+
+    this.activePointerId = ev.pointerId;
+    this.startPointerScreenX = ev.clientX;
+    this.startPaddleWorldY = this.currentPaddleYProvider();
+    this.targetWorldY = this.startPaddleWorldY;
+
+    try {
+      this.canvas.setPointerCapture(ev.pointerId);
+    } catch {
+      // older browsers may not support pointer capture
+    }
+  }
+
+  private handleMove(ev: PointerEvent) {
+    if (ev.pointerId !== this.activePointerId) return;
+    const rect = this.canvas.getBoundingClientRect();
+    const screenDx = ev.clientX - this.startPointerScreenX;
+    // Convert horizontal screen pixels → game world Y units.
+    // Screen width maps to ARENA_HEIGHT span on the visible movement axis.
+    const worldDelta = (screenDx / rect.width) * ARENA_HEIGHT * SENSITIVITY;
+    this.targetWorldY = this.startPaddleWorldY + worldDelta;
+  }
+
+  private handleUp(ev: PointerEvent) {
+    if (ev.pointerId !== this.activePointerId) return;
+    this.activePointerId = null;
+    this.targetWorldY = null;
+    try {
+      this.canvas.releasePointerCapture(ev.pointerId);
+    } catch {
+      // ignore
+    }
   }
 }
