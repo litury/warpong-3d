@@ -1,13 +1,13 @@
 export function Hero() {
   return (
-    <section className="hero-section" style={{ minHeight: "calc(100vh - 64px)", display: "flex", alignItems: "center", padding: "80px 0" }}>
+    <section className="hero-section" style={{ minHeight: "calc(85vh - 64px)", display: "flex", alignItems: "center", padding: "80px 0" }}>
       <div className="container grid-hero">
         <div className="hero-text" style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-          <p className="section-label">Браузерная 3D игра</p>
+          <p className="section-label">Открытый исходный код · Multiplayer</p>
           <h1>WARPONG 3D</h1>
           <p style={{ fontSize: "1.25rem", color: "var(--text-secondary)", maxWidth: 480 }}>
-            Мультиплеер понг с мехами, плазменными орбами и зомби-волнами.
-            Сражайся онлайн, прокачивай ракетку, поднимайся в рейтинге.
+            Понг 1 на 1 в браузере. Без установки, без регистрации.
+            Тот самый понг — но с мехами, плазмой и рейтингом ELO.
           </p>
           <div className="hero-actions" style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 8 }}>
             <a href="https://play.warpong.ru" className="btn-primary">
@@ -19,7 +19,7 @@ export function Hero() {
               rel="noopener noreferrer"
               className="btn-outline"
             >
-              GitHub
+              {"</> Исходники"}
             </a>
           </div>
         </div>

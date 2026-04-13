@@ -3,12 +3,12 @@ export function OpenSource() {
     <section>
       <div className="container grid-split">
         <div>
-          <p className="section-label">Open Source</p>
-          <h2 className="section-title">Открытый код</h2>
+          <p className="section-label">Open Source · MIT</p>
+          <h2 className="section-title">Код открыт. Заходи и разбирайся.</h2>
           <p style={{ color: "var(--text-secondary)", marginBottom: 24 }}>
-            Весь исходный код доступен на GitHub под лицензией MIT.
-            Изучайте, форкайте, контрибьютьте. Идеально для изучения
-            мультиплеерной архитектуры и Babylon.js.
+            Если интересна архитектура мультиплеера, server-authoritative
+            физика или Babylon.js — весь код в репозитории.
+            PR и issues приветствуются.
           </p>
           <a
             href="https://github.com/litury/warpong-3d"

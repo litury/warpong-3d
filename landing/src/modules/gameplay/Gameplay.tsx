@@ -15,11 +15,12 @@ export function Gameplay() {
   return (
     <section>
       <div className="container">
-        <p className="section-label">Механики</p>
-        <h2 className="section-title">Быстрые матчи, глубокий геймплей</h2>
+        <p className="section-label">Как это работает</p>
+        <h2 className="section-title">Простые правила, серьёзный код</h2>
         <p className="section-description">
-          Серверная физика 60 тиков/с, интерполяция на клиенте.
-          Первый до 5 очков побеждает. Мяч ускоряется с каждым ударом.
+          До 5 очков. Мяч ускоряется с каждым отбиванием.
+          Угол отскока зависит от точки удара по ракетке.
+          ELO-рейтинг растёт с каждой победой, ставка 10 монет за матч.
         </p>
 
         <div className="screenshot-frame">

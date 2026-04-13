@@ -19,11 +19,11 @@ export function TechStack() {
   return (
     <section>
       <div className="container">
-        <p className="section-label">Технологии</p>
+        <p className="section-label">Под капотом</p>
         <h2 className="section-title">Стек</h2>
         <p className="section-description">
-          Современный стек без компромиссов. Серверная авторитарная архитектура,
-          мгновенный билд, строгая типизация.
+          Bun вместо Node — старт за 50мс. Babylon.js для 3D в браузере.
+          SQLite в файле — никаких отдельных БД-серверов.
         </p>
         <div style={gridStyle}>
           {stack.map((s) => (
