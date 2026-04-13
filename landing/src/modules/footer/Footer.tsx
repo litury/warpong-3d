@@ -22,7 +22,7 @@ export function Footer() {
     <footer style={footerStyle}>
       <div className="container" style={innerStyle}>
         <span style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>
-          © {new Date().getFullYear()} Litvinov Y. MIT License.
+          © {new Date().getFullYear()} Litvinov Y. · MIT License
         </span>
         <div style={linksStyle}>
           <a
