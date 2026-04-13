@@ -56,6 +56,7 @@ export class GameSession {
   private rightPlayer: ServerWebSocket<PlayerData>;
   private tickTimer: ReturnType<typeof setInterval> | null = null;
   private onEnd: (sessionId: string) => void;
+  private onMatchSettled?: () => void;
 
   // Grace period state
   private leftToken: string;
@@ -69,12 +70,14 @@ export class GameSession {
     left: ServerWebSocket<PlayerData>,
     right: ServerWebSocket<PlayerData>,
     onEnd: (sessionId: string) => void,
+    onMatchSettled?: () => void,
   ) {
     this.id = crypto.randomUUID();
     this.leftPlayer = left;
     this.rightPlayer = right;
     this.state = createInitialState(left.data.upgrades, right.data.upgrades);
     this.onEnd = onEnd;
+    this.onMatchSettled = onMatchSettled;
     this.leftToken = crypto.randomUUID();
     this.rightToken = crypto.randomUUID();
   }
@@ -344,6 +347,8 @@ export class GameSession {
     loserWs.data.coins = settled.loserCoins;
     winnerWs.data.stakeReserved = false;
     loserWs.data.stakeReserved = false;
+
+    this.onMatchSettled?.();
 
     return {
       winReward,

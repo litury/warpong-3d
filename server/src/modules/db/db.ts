@@ -16,6 +16,25 @@ db.run(`CREATE TABLE IF NOT EXISTS players (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 )`);
 
+db.run(`CREATE TABLE IF NOT EXISTS game_stats (
+  id INTEGER PRIMARY KEY CHECK(id = 1),
+  total_matches_completed INTEGER NOT NULL DEFAULT 0
+)`);
+db.run(
+  "INSERT OR IGNORE INTO game_stats (id, total_matches_completed) VALUES (1, 0)",
+);
+
+const stmtGetTotalMatches = db.prepare<{ total_matches_completed: number }, []>(
+  "SELECT total_matches_completed FROM game_stats WHERE id = 1",
+);
+const stmtIncrementMatches = db.prepare(
+  "UPDATE game_stats SET total_matches_completed = total_matches_completed + 1 WHERE id = 1",
+);
+
+export function getTotalMatchesCompleted(): number {
+  return stmtGetTotalMatches.get()?.total_matches_completed ?? 0;
+}
+
 export interface PlayerRecord {
   id: string;
   name: string;
@@ -140,6 +159,8 @@ const settleGameTx = db.transaction(
     const newWinnerTotalWins = winnerRow.total_online_wins + 1;
     stmtUpdateStreak.run(newWinnerStreak, newWinnerTotalWins, winnerId);
     stmtUpdateStreak.run(0, loserRow.total_online_wins, loserId);
+
+    stmtIncrementMatches.run();
 
     return {
       winnerCoins: winnerRow.coins,

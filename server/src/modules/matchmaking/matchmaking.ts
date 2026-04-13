@@ -17,9 +17,11 @@ export class Matchmaking {
   private queue: QueueEntry[] = [];
   private sessions = new Map<string, GameSession>();
   private playerSession = new Map<string, string>();
+  private onMatchSettled?: () => void;
 
-  constructor() {
+  constructor(onMatchSettled?: () => void) {
     this.tickTimer = setInterval(() => this.tick(), TICK_INTERVAL);
+    this.onMatchSettled = onMatchSettled;
   }
 
   addToQueue(ws: ServerWebSocket<PlayerData>): void {
@@ -175,11 +177,16 @@ export class Matchmaking {
     const left = a.ws;
     const right = b.ws;
 
-    const session = new GameSession(left, right, (id) => {
-      this.sessions.delete(id);
-      this.playerSession.delete(left.data.playerId);
-      this.playerSession.delete(right.data.playerId);
-    });
+    const session = new GameSession(
+      left,
+      right,
+      (id) => {
+        this.sessions.delete(id);
+        this.playerSession.delete(left.data.playerId);
+        this.playerSession.delete(right.data.playerId);
+      },
+      this.onMatchSettled,
+    );
     this.sessions.set(session.id, session);
     this.playerSession.set(left.data.playerId, session.id);
     this.playerSession.set(right.data.playerId, session.id);

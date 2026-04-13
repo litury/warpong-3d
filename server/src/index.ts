@@ -12,6 +12,7 @@ import type { PlayerRecord } from "./modules/db";
 import {
   getOrCreatePlayer,
   getPlayer,
+  getTotalMatchesCompleted,
   releaseStake,
   reserveStake,
 } from "./modules/db";
@@ -21,8 +22,8 @@ import { Matchmaking } from "./modules/matchmaking";
 import { handleFetch } from "./routes/http";
 import type { ClientMessage } from "./shared";
 
-const matchmaking = new Matchmaking();
 const connectedSockets = new Set<ServerWebSocket<PlayerData>>();
+const matchmaking = new Matchmaking(() => broadcastGameStats());
 
 let onlineCountDirty = false;
 let onlineCountTimer: ReturnType<typeof setTimeout> | null = null;
@@ -60,6 +61,29 @@ function flushOnlineCount() {
   }
 }
 
+export function broadcastGameStats() {
+  const msg = JSON.stringify({
+    type: "GameStatsUpdate",
+    totalMatches: getTotalMatchesCompleted(),
+  });
+  for (const ws of connectedSockets) {
+    try {
+      ws.send(msg);
+    } catch {
+      /* disconnected */
+    }
+  }
+}
+
+function sendGameStats(ws: ServerWebSocket<PlayerData>) {
+  ws.send(
+    JSON.stringify({
+      type: "GameStatsUpdate",
+      totalMatches: getTotalMatchesCompleted(),
+    }),
+  );
+}
+
 function sendPlayerSync(ws: ServerWebSocket<PlayerData>, player: PlayerRecord) {
   ws.send(
     JSON.stringify({
@@ -85,6 +109,7 @@ Bun.serve<PlayerData>({
       console.log("WebSocket connected (awaiting auth)");
       connectedSockets.add(ws);
       broadcastOnlineCount();
+      sendGameStats(ws);
     },
 
     async message(ws, raw) {

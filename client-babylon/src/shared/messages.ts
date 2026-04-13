@@ -78,6 +78,7 @@ export type ServerMessage =
   | { type: "QueueStatus"; estimatedWaitSec: number; rangeWidth: number }
   | { type: "QueueTimeout" }
   | { type: "OnlineCount"; count: number }
+  | { type: "GameStatsUpdate"; totalMatches: number }
   | { type: "OpponentChat"; chatId: QuickChatId };
 
 export type GameEvent =
