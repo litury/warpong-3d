@@ -44,9 +44,6 @@ async function main() {
   const state = new AppState();
   const logic = new GameLogic();
   const input = new InputManager(canvas, scene);
-  input.setPaddleYProvider(() =>
-    state.playerSide === "Right" ? logic.rightPaddleY : logic.leftPaddleY,
-  );
   const ws = new WsClient();
   const sound = new SoundManager();
   const zombieManager = new ZombieManager(scene, shadowGen, sound);
