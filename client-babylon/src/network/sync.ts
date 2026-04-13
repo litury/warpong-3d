@@ -13,6 +13,7 @@ export function processServerMessages(
     onOpponentDisconnected?: () => void;
     onScoreUpdate?: () => void;
     onOnlineCount?: (count: number) => void;
+    onGameStatsUpdate?: (totalMatches: number) => void;
   },
 ) {
   const mirror = playerSide === "Right";
@@ -67,6 +68,10 @@ export function processServerMessages(
 
       case "OnlineCount":
         callbacks.onOnlineCount?.(msg.count);
+        break;
+
+      case "GameStatsUpdate":
+        callbacks.onGameStatsUpdate?.(msg.totalMatches);
         break;
 
       default:

@@ -18,6 +18,7 @@ export interface UIElements {
   btnRestart: HTMLElement;
   coins: HTMLElement;
   onlineCount: HTMLElement;
+  matchesCount: HTMLElement;
 }
 
 export function queryUIElements(): UIElements {
@@ -34,6 +35,7 @@ export function queryUIElements(): UIElements {
     btnRestart: document.getElementById("btn-restart")!,
     coins: document.getElementById("coins")!,
     onlineCount: document.getElementById("online-count")!,
+    matchesCount: document.getElementById("matches-count")!,
   };
 }
 
@@ -126,6 +128,10 @@ export class UIManager {
 
   updateOnlineCount(count: number) {
     this.ui.onlineCount.textContent = `${t("online_count")}: ${count}`;
+  }
+
+  updateMatchesCount(count: number) {
+    this.ui.matchesCount.textContent = `${t("matches_played")}: ${count}`;
   }
 
   updateFps(fps: number) {
