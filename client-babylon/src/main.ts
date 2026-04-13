@@ -81,6 +81,7 @@ async function main() {
     ui.updateCoins(zombieManager);
     state.resetForNewGame();
     sound.playMusic("battle");
+    ui.showTouchHint();
     ysdk?.features.GameplayAPI?.start();
 
     // Lazy-load zombie assets on first game start (4s spawn delay gives plenty of time)

@@ -19,6 +19,7 @@ export interface UIElements {
   coins: HTMLElement;
   onlineCount: HTMLElement;
   matchesCount: HTMLElement;
+  touchHint: HTMLElement;
 }
 
 export function queryUIElements(): UIElements {
@@ -36,8 +37,13 @@ export function queryUIElements(): UIElements {
     coins: document.getElementById("coins")!,
     onlineCount: document.getElementById("online-count")!,
     matchesCount: document.getElementById("matches-count")!,
+    touchHint: document.getElementById("touch-hint")!,
   };
 }
+
+const HINT_STORAGE_KEY = "warpong_hint_shown_count";
+const HINT_MAX_SHOWS = 3;
+const HINT_DURATION_MS = 2500;
 
 export class UIManager {
   constructor(
@@ -45,6 +51,42 @@ export class UIManager {
     private updateScoreboard: (left: number, right: number) => void,
     private sound: SoundManager,
   ) {}
+
+  /** Show first-time touch hint overlay. Displays up to HINT_MAX_SHOWS times, then never again. */
+  showTouchHint() {
+    let count = 0;
+    try {
+      count = Number(localStorage.getItem(HINT_STORAGE_KEY) || "0");
+    } catch {
+      // localStorage unavailable (e.g. privacy mode) — just show without persistence
+    }
+    if (count >= HINT_MAX_SHOWS) return;
+    try {
+      localStorage.setItem(HINT_STORAGE_KEY, String(count + 1));
+    } catch {
+      // ignore
+    }
+
+    const el = this.ui.touchHint;
+    el.textContent = t("touch_hint");
+    el.style.display = "block";
+    requestAnimationFrame(() => {
+      el.style.opacity = "1";
+    });
+
+    let hidden = false;
+    const hide = () => {
+      if (hidden) return;
+      hidden = true;
+      el.style.opacity = "0";
+      setTimeout(() => {
+        el.style.display = "none";
+      }, 300);
+      window.removeEventListener("pointerdown", hide);
+    };
+    setTimeout(hide, HINT_DURATION_MS);
+    window.addEventListener("pointerdown", hide, { once: true });
+  }
 
   applyTranslations() {
     this.ui.loading.textContent = t("loading");

@@ -16,6 +16,7 @@ const translations: Record<string, Record<string, string>> = {
     matching: "Поиск...",
     online_count: "Онлайн",
     matches_played: "Сыграно матчей",
+    touch_hint: "Коснитесь или кликните чтобы двигать мех",
   },
   en: {
     title: "PONG 3D",
@@ -32,6 +33,7 @@ const translations: Record<string, Record<string, string>> = {
     matching: "Matching...",
     online_count: "Online",
     matches_played: "Matches played",
+    touch_hint: "Tap or click anywhere to move your mech",
   },
 };
 
