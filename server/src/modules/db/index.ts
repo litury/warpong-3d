@@ -3,6 +3,7 @@ export {
   getLeaderboard,
   getOrCreatePlayer,
   getPlayer,
+  getTotalMatchesCompleted,
   type PlayerRecord,
   releaseStake,
   reserveStake,
