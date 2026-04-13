@@ -245,10 +245,56 @@ export class GameLogic {
     this.targetRightY = rightY;
     this.score.left = scoreLeft;
     this.score.right = scoreRight;
+
+    // Reconciliation: if client-predicted paddle drifted far from server, gently correct
+    const RECONCILE_THRESHOLD = 30;
+    const RECONCILE_RATE = 0.3;
+    if (Math.abs(this.leftPaddleY - leftY) > RECONCILE_THRESHOLD) {
+      this.leftPaddleY += (leftY - this.leftPaddleY) * RECONCILE_RATE;
+    }
+    if (Math.abs(this.rightPaddleY - rightY) > RECONCILE_THRESHOLD) {
+      this.rightPaddleY += (rightY - this.rightPaddleY) * RECONCILE_RATE;
+    }
   }
 
-  /** Smoothly move current positions toward server targets. Call every frame in online mode. */
-  interpolate(dt: number) {
+  /**
+   * Client-side prediction for own paddle in online mode.
+   * Apply local input immediately, server reconciliation happens in applyServerState.
+   * Call BEFORE interpolate() each frame.
+   */
+  predictOwnPaddle(
+    dt: number,
+    mySide: "Left" | "Right",
+    inputDir: number,
+    touchTargetY: number | null,
+  ) {
+    const bound = ARENA_HEIGHT / 2 - WALL_INSET - this.paddleHeight / 2;
+    const apply = (current: number): number => {
+      if (touchTargetY !== null) {
+        const diff = touchTargetY - current;
+        const maxStep = this.paddleSpeed * dt;
+        const step = Math.max(-maxStep, Math.min(maxStep, diff));
+        return Math.max(-bound, Math.min(bound, current + step));
+      }
+      if (inputDir !== 0) {
+        return Math.max(
+          -bound,
+          Math.min(bound, current + inputDir * this.paddleSpeed * dt),
+        );
+      }
+      return current;
+    };
+    if (mySide === "Right") {
+      this.rightPaddleY = apply(this.rightPaddleY);
+    } else {
+      this.leftPaddleY = apply(this.leftPaddleY);
+    }
+  }
+
+  /** Smoothly move current positions toward server targets. Call every frame in online mode.
+   *  Skips own paddle (it is client-predicted via predictOwnPaddle).
+   */
+  interpolate(dt: number, mySide: "Left" | "Right" | null) {
     // Extrapolate target by velocity so ball doesn't lag between server ticks
     this.targetBall.x += this.targetBall.vx * dt;
     this.targetBall.y += this.targetBall.vy * dt;
@@ -258,8 +304,11 @@ export class GameLogic {
     this.ball.y += (this.targetBall.y - this.ball.y) * f;
     this.ball.vx = this.targetBall.vx;
     this.ball.vy = this.targetBall.vy;
-    this.leftPaddleY += (this.targetLeftY - this.leftPaddleY) * f;
-    this.rightPaddleY += (this.targetRightY - this.rightPaddleY) * f;
+    // Interpolate only opponent paddle; own paddle is owned by client prediction
+    if (mySide !== "Left")
+      this.leftPaddleY += (this.targetLeftY - this.leftPaddleY) * f;
+    if (mySide !== "Right")
+      this.rightPaddleY += (this.targetRightY - this.rightPaddleY) * f;
   }
 
   restart() {

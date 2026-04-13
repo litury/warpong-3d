@@ -79,12 +79,22 @@ export function startRenderLoop(
       const dir = kbDir !== 0 ? kbDir : input.getTouchDirection(myPaddleY);
       const direction = dir > 0 ? "Up" : dir < 0 ? "Down" : "Idle";
       ws.send({ type: "PlayerInput", direction });
+
+      // Client-side prediction for own paddle (instant response, no network lag)
+      if (state.playerSide) {
+        logic.predictOwnPaddle(
+          dt,
+          state.playerSide,
+          kbDir,
+          input.getTouchWorldY(),
+        );
+      }
     }
 
     if (state.mode === "solo" && state.playing) {
       logic.update(dt, input.getDirection(), input.getTouchWorldY());
     } else if (state.mode === "online" && state.playing && !logic.gameOver) {
-      logic.interpolate(dt);
+      logic.interpolate(dt, state.playerSide);
     }
 
     if (state.playing) {
