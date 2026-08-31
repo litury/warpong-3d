@@ -102,6 +102,8 @@ async function main() {
     if (document.hidden) pausePlatform();
     else resumePlatform();
   });
+  window.addEventListener("pagehide", pausePlatform);
+  window.addEventListener("pageshow", resumePlatform);
 
   const ysdkEvents = ysdk as YsdkWithEvents | null;
   ysdkEvents?.on?.("game_api_pause", pausePlatform);

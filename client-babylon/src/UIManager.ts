@@ -47,7 +47,7 @@ const HINT_STORAGE_KEY = "warpong_hint_shown_count";
 const HINT_MAX_SHOWS = 3;
 const HINT_DURATION_MS = 2500;
 
-/** iOS Safari often drops click; pointerup + click with debounce. */
+/** iOS Safari often drops click; pointerup + touchstart + click with debounce. */
 function bindPress(el: HTMLElement, handler: () => void) {
   let last = 0;
   const fire = (e: Event) => {
@@ -59,6 +59,7 @@ function bindPress(el: HTMLElement, handler: () => void) {
     handler();
   };
   el.addEventListener("pointerup", fire);
+  el.addEventListener("touchstart", fire, { passive: false });
   el.addEventListener("click", fire);
 }
 
