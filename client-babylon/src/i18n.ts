@@ -2,7 +2,7 @@
 
 const translations: Record<string, Record<string, string>> = {
   ru: {
-    title: "ПОНГ 3D",
+    title: "Pong 3D",
     solo: "СОЛО",
     online: "ОНЛАЙН",
     play_again: "ИГРАТЬ СНОВА",
@@ -14,12 +14,16 @@ const translations: Record<string, Record<string, string>> = {
     waiting: "Ожидание соперника...",
     no_opponent: "Соперник не найден. Попробуйте позже.",
     matching: "Поиск...",
+    searching: "Поиск соперника",
+    cancel: "Отмена",
     online_count: "Онлайн",
     matches_played: "Сыграно матчей",
     touch_hint: "Коснитесь или кликните чтобы двигать мех",
+    opponent_left: "Соперник вышел",
+    opponent_reconnect: "Соперник переподключается",
   },
   en: {
-    title: "PONG 3D",
+    title: "Pong 3D",
     solo: "SOLO",
     online: "ONLINE",
     play_again: "PLAY AGAIN",
@@ -31,9 +35,13 @@ const translations: Record<string, Record<string, string>> = {
     waiting: "Waiting for opponent...",
     no_opponent: "No opponent found. Try again later.",
     matching: "Matching...",
+    searching: "Searching for opponent",
+    cancel: "Cancel",
     online_count: "Online",
     matches_played: "Matches played",
     touch_hint: "Tap or click anywhere to move your mech",
+    opponent_left: "Opponent left",
+    opponent_reconnect: "Opponent reconnecting",
   },
 };
 
@@ -41,6 +49,8 @@ let currentLang = "ru";
 
 export function setLang(lang: string) {
   currentLang = translations[lang] ? lang : "ru";
+  document.documentElement.lang = currentLang;
+  document.title = t("title");
 }
 
 export function t(key: string): string {

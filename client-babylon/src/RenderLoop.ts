@@ -14,6 +14,7 @@ import type { InputManager } from "./game/InputManager";
 import type { LoadedMech } from "./game/MechLoader";
 import type { SoundManager } from "./game/soundManager";
 import type { ZombieManager } from "./game/ZombieManager";
+import { t } from "./i18n";
 import { processServerMessages } from "./network/sync";
 import type { WsClient } from "./network/wsClient";
 import type { UIManager } from "./UIManager";
@@ -63,9 +64,9 @@ export function startRenderLoop(
           const iWon = winner === state.playerSide;
           sound.play(iWon ? "victory" : "defeat");
           sound.playMusic("menu");
-          ui.showGameOver(iWon ? "YOU WIN!" : "YOU LOSE!");
+          ui.showGameOver(iWon ? t("you_win") : t("you_lose"));
         },
-        onOpponentDisconnected: () => ui.showGameOver("OPPONENT LEFT"),
+        onOpponentDisconnected: () => ui.showGameOver(t("opponent_left")),
         onScoreUpdate: () => ui.updateScore(logic),
         onOnlineCount: (count) => ui.updateOnlineCount(count),
         onGameStatsUpdate: (count) => ui.updateMatchesCount(count),
@@ -134,7 +135,6 @@ export function startRenderLoop(
       }
     }
 
-    ui.updateFps(engine.getFps());
     scene.render();
   });
 }
