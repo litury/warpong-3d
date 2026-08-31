@@ -7,15 +7,16 @@ import { t } from "./i18n";
 
 export interface UIElements {
   hud: HTMLElement;
-  fps: HTMLElement;
   loading: HTMLElement;
   menu: HTMLElement;
   status: HTMLElement;
+  statusText: HTMLElement;
   gameOver: HTMLElement;
   resultText: HTMLElement;
   btnSolo: HTMLElement;
   btnOnline: HTMLElement;
   btnRestart: HTMLElement;
+  btnCancelSearch: HTMLElement;
   coins: HTMLElement;
   onlineCount: HTMLElement;
   matchesCount: HTMLElement;
@@ -25,16 +26,17 @@ export interface UIElements {
 export function queryUIElements(): UIElements {
   return {
     hud: document.getElementById("hud")!,
-    fps: document.getElementById("fps")!,
     loading: document.getElementById("loading")!,
     menu: document.getElementById("menu")!,
     status: document.getElementById("status")!,
+    statusText: document.getElementById("status-text")!,
     gameOver: document.getElementById("game-over")!,
     resultText: document.getElementById("result-text")!,
     btnSolo: document.getElementById("btn-solo")!,
     btnOnline: document.getElementById("btn-online")!,
     btnRestart: document.getElementById("btn-restart")!,
-    coins: document.getElementById("coins")!,
+    btnCancelSearch: document.getElementById("btn-cancel-search")!,
+    coins: document.getElementById("coins-hud")!,
     onlineCount: document.getElementById("online-count")!,
     matchesCount: document.getElementById("matches-count")!,
     touchHint: document.getElementById("touch-hint")!,
@@ -44,6 +46,22 @@ export function queryUIElements(): UIElements {
 const HINT_STORAGE_KEY = "warpong_hint_shown_count";
 const HINT_MAX_SHOWS = 3;
 const HINT_DURATION_MS = 2500;
+
+/** iOS Safari often drops click; pointerup + touchstart + click with debounce. */
+function bindPress(el: HTMLElement, handler: () => void) {
+  let last = 0;
+  const fire = (e: Event) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const now = performance.now();
+    if (now - last < 350) return;
+    last = now;
+    handler();
+  };
+  el.addEventListener("pointerup", fire);
+  el.addEventListener("touchstart", fire, { passive: false });
+  el.addEventListener("click", fire);
+}
 
 export class UIManager {
   constructor(
@@ -94,6 +112,7 @@ export class UIManager {
     this.ui.btnSolo.textContent = t("solo");
     this.ui.btnOnline.textContent = t("online");
     this.ui.btnRestart.textContent = t("play_again");
+    this.ui.btnCancelSearch.textContent = t("cancel");
   }
 
   hideLoading() {
@@ -102,38 +121,49 @@ export class UIManager {
 
   showMenu() {
     this.ui.menu.style.display = "block";
+    this.ui.status.style.display = "none";
+    this.ui.btnCancelSearch.style.display = "none";
+    this.ui.coins.style.display = "none";
   }
 
   showGameUI() {
     this.ui.menu.style.display = "none";
     this.ui.status.style.display = "none";
+    this.ui.btnCancelSearch.style.display = "none";
     this.ui.gameOver.style.display = "none";
     this.ui.hud.style.display = "block";
+    this.ui.coins.style.display = "block";
   }
 
   showConnecting() {
     this.ui.menu.style.display = "none";
     this.ui.status.style.display = "block";
-    this.ui.status.textContent = t("connecting");
+    this.ui.statusText.textContent = t("connecting");
+    this.ui.btnCancelSearch.style.display = "block";
   }
 
   showWaiting() {
-    this.ui.status.textContent = t("waiting");
+    this.ui.status.style.display = "block";
+    this.ui.statusText.textContent = t("waiting");
+    this.ui.btnCancelSearch.style.display = "block";
   }
 
   showQueueStatus(estimatedWaitSec: number) {
+    this.ui.status.style.display = "block";
+    this.ui.btnCancelSearch.style.display = "block";
     if (estimatedWaitSec <= 0) {
-      this.ui.status.textContent = t("matching");
+      this.ui.statusText.textContent = t("matching");
     } else {
       const m = Math.floor(estimatedWaitSec / 60);
       const s = estimatedWaitSec % 60;
       const time = m > 0 ? `~${m}m ${s}s` : `~${s}s`;
-      this.ui.status.textContent = `Searching for opponent... ${time}`;
+      this.ui.statusText.textContent = `${t("searching")}... ${time}`;
     }
   }
 
   showQueueTimeout() {
-    this.ui.status.textContent = t("no_opponent");
+    this.ui.statusText.textContent = t("no_opponent");
+    this.ui.btnCancelSearch.style.display = "none";
     setTimeout(() => {
       this.ui.status.style.display = "none";
       this.showMenu();
@@ -142,13 +172,15 @@ export class UIManager {
 
   showGameOver(text: string) {
     this.ui.status.style.display = "none";
+    this.ui.btnCancelSearch.style.display = "none";
     this.ui.resultText.textContent = text;
     this.ui.gameOver.style.display = "block";
   }
 
   showPaused(secondsLeft: number) {
     this.ui.status.style.display = "block";
-    this.ui.status.textContent = `Opponent reconnecting... ${secondsLeft}s`;
+    this.ui.btnCancelSearch.style.display = "none";
+    this.ui.statusText.textContent = `${t("opponent_reconnect")}... ${secondsLeft}s`;
   }
 
   hidePaused() {
@@ -158,6 +190,7 @@ export class UIManager {
   hideGameOver() {
     this.ui.gameOver.style.display = "none";
     this.ui.hud.style.display = "none";
+    this.ui.coins.style.display = "none";
   }
 
   updateScore(logic: GameLogic) {
@@ -176,10 +209,6 @@ export class UIManager {
     this.ui.matchesCount.textContent = `${t("matches_played")}: ${count}`;
   }
 
-  updateFps(fps: number) {
-    this.ui.fps.textContent = `FPS: ${fps.toFixed(0)}`;
-  }
-
   bindMenuButtons(deps: {
     state: AppState;
     logic: GameLogic;
@@ -187,13 +216,13 @@ export class UIManager {
     zombieManager: ZombieManager;
     onStartGame: () => void;
   }) {
-    this.ui.btnSolo.addEventListener("click", () => {
+    bindPress(this.ui.btnSolo, () => {
       this.sound.play("uiClick");
       deps.state.mode = "solo";
       deps.onStartGame();
     });
 
-    this.ui.btnOnline.addEventListener("click", () => {
+    bindPress(this.ui.btnOnline, () => {
       this.sound.play("uiClick");
       deps.state.mode = "online";
       deps.state.playerSide = null;
@@ -201,7 +230,14 @@ export class UIManager {
       deps.ws.joinQueue();
     });
 
-    this.ui.btnRestart.addEventListener("click", () => {
+    bindPress(this.ui.btnCancelSearch, () => {
+      this.sound.play("uiClick");
+      deps.ws.leaveQueue();
+      deps.state.resetToMenu();
+      this.showMenu();
+    });
+
+    bindPress(this.ui.btnRestart, () => {
       this.sound.play("uiClick");
       this.hideGameOver();
       if (deps.state.mode === "online") {

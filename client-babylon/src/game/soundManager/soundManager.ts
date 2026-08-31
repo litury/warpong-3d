@@ -179,6 +179,20 @@ export class SoundManager {
     );
   }
 
+  /** Pause all audio (tab hidden / YaGames pause). */
+  suspend() {
+    if (this.ctx && this.ctx.state === "running") {
+      void this.ctx.suspend();
+    }
+  }
+
+  /** Resume audio after returning to the tab. */
+  resume() {
+    if (this.ctx && this.ctx.state === "suspended") {
+      void this.ctx.resume();
+    }
+  }
+
   stopLoop(_name: string) {}
 
   setSfxVolume(v: number) {

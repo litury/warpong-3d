@@ -60,6 +60,13 @@ export class WsClient {
     }
   }
 
+  leaveQueue() {
+    this._pendingJoin = false;
+    if (this._connected) {
+      this.send({ type: "LeaveQueue" });
+    }
+  }
+
   send(msg: ClientMessage) {
     if (this.ws && this._connected) {
       this.ws.send(JSON.stringify(msg));

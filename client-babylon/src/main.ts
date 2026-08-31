@@ -30,8 +30,20 @@ async function initYandexSDK(): Promise<SDK | null> {
   }
 }
 
+function disableBrowserChrome() {
+  const block = (e: Event) => e.preventDefault();
+  document.addEventListener("contextmenu", block);
+  document.addEventListener("selectstart", block);
+  canvas.addEventListener("contextmenu", block);
+}
+
+type YsdkWithEvents = SDK & {
+  on?: (event: string, handler: () => void) => void;
+};
+
 async function main() {
   ysdk = await initYandexSDK();
+  disableBrowserChrome();
 
   // Set language from Yandex SDK (requirement 2.14)
   const lang = ysdk?.environment.i18n.lang ?? "ru";
@@ -59,17 +71,43 @@ async function main() {
   // Tell Yandex platform the game is fully loaded and ready
   ysdk?.features.LoadingAPI?.ready();
 
-  // Unlock audio on first user click — creates AudioContext and loads sounds
+  // Unlock audio on first user gesture — creates AudioContext and loads sounds
   const unlockAudio = async () => {
     if (sound.isReady) return;
     sound.unlock();
     document.removeEventListener("click", unlockAudio);
     document.removeEventListener("touchstart", unlockAudio);
+    document.removeEventListener("pointerdown", unlockAudio);
     await sound.waitForLoad();
     sound.playMusic("menu");
   };
   document.addEventListener("click", unlockAudio);
   document.addEventListener("touchstart", unlockAudio);
+  document.addEventListener("pointerdown", unlockAudio);
+
+  const pausePlatform = () => {
+    sound.suspend();
+    if (state.playing) {
+      ysdk?.features.GameplayAPI?.stop();
+    }
+  };
+  const resumePlatform = () => {
+    sound.resume();
+    if (state.playing) {
+      ysdk?.features.GameplayAPI?.start();
+    }
+  };
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) pausePlatform();
+    else resumePlatform();
+  });
+  window.addEventListener("pagehide", pausePlatform);
+  window.addEventListener("pageshow", resumePlatform);
+
+  const ysdkEvents = ysdk as YsdkWithEvents | null;
+  ysdkEvents?.on?.("game_api_pause", pausePlatform);
+  ysdkEvents?.on?.("game_api_resume", resumePlatform);
 
   let zombieAssetsReady = false;
 
